@@ -6,11 +6,23 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import com.omondit.alarmfocus.ui.navigation.ADHDBottomNavigation
+import com.omondit.alarmfocus.ui.screens.AlarmsScreen
+import com.omondit.alarmfocus.ui.screens.FocusScreen
+import com.omondit.alarmfocus.ui.screens.MissionsScreen
+import com.omondit.alarmfocus.ui.screens.SettingsScreen
 import com.omondit.alarmfocus.ui.theme.AlarmFocusTheme
 
 class MainActivity : ComponentActivity() {
@@ -20,28 +32,46 @@ class MainActivity : ComponentActivity() {
         setContent {
             AlarmFocusTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    ADHDAlarmApp()
                 }
             }
         }
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
 
-@Preview(showBackground = true)
+
 @Composable
-fun GreetingPreview() {
-    AlarmFocusTheme {
-        Greeting("Android")
+fun ADHDAlarmApp() {
+    val navController = rememberNavController()
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStackEntry?.destination?.route ?: "alarms"
+
+    Scaffold(
+        bottomBar = {
+            ADHDBottomNavigation(
+                currentRoute = currentRoute,
+                onNavigate = { route ->
+                    navController.navigate(route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        NavHost(
+            navController = navController,
+            startDestination = "alarms",
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            composable("alarms") { AlarmsScreen() }
+            composable("missions") { MissionsScreen() }
+            composable("focus") { FocusScreen() }
+            composable("settings") { SettingsScreen() }
+        }
     }
 }

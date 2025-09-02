@@ -1,12 +1,16 @@
 package com.omondit.alarmfocus
 
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-
+import androidx.test.platform.app.InstrumentationRegistry
+import com.omondit.alarmfocus.ui.theme.AlarmFocusTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-
-import org.junit.Assert.*
 
 /**
  * Instrumented test, which will execute on an Android device.
@@ -20,5 +24,28 @@ class ExampleInstrumentedTest {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         assertEquals("com.omondit.alarmfocus", appContext.packageName)
+    }
+}
+
+@RunWith(AndroidJUnit4::class)
+class NavigationTest {
+
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun bottomNavigationWorksCorrectly() {
+        composeTestRule.setContent {
+            AlarmFocusTheme {
+                ADHDAlarmApp()
+            }
+        }
+
+        // Test navigation between tabs
+        composeTestRule.onNodeWithContentDescription("Wake-up missions tab").performClick()
+        composeTestRule.onNodeWithText("Missions").assertExists()
+
+        composeTestRule.onNodeWithContentDescription("Settings tab").performClick()
+        composeTestRule.onNodeWithText("Settings").assertExists()
     }
 }

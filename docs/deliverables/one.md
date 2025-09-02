@@ -30,6 +30,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended") // For additional icons
     implementation("androidx.activity:activity-compose:1.8.2")
     
     // Navigation
@@ -343,6 +344,265 @@ fun AlarmsScreen() {
         }
     }
 }
+```
+
+**MissionsScreen.kt:**
+```kotlin
+@Composable
+fun MissionsScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Wake-Up Missions",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier
+                .semantics { contentDescription = "Wake-up missions screen title" }
+                .padding(bottom = 24.dp)
+        )
+        
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                MissionCard(
+                    title = "Math Challenge",
+                    description = "Solve arithmetic problems to dismiss alarm",
+                    icon = Icons.Filled.Calculate,
+                    enabled = false
+                )
+            }
+            item {
+                MissionCard(
+                    title = "Barcode Scanner",
+                    description = "Scan a specific barcode to turn off alarm",
+                    icon = Icons.Filled.QrCode,
+                    enabled = false
+                )
+            }
+            item {
+                MissionCard(
+                    title = "Photo Verification",
+                    description = "Take a photo matching your reference image",
+                    icon = Icons.Filled.PhotoCamera,
+                    enabled = false
+                )
+            }
+            item {
+                MissionCard(
+                    title = "Physical Activity",
+                    description = "Complete jumping jacks or squats",
+                    icon = Icons.Filled.FitnessCenter,
+                    enabled = false
+                )
+            }
+            item {
+                MissionCard(
+                    title = "Motivational Quote",
+                    description = "Type an inspirational quote accurately",
+                    icon = Icons.Filled.FormatQuote,
+                    enabled = false
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MissionCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    enabled: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.6f),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) 
+                MaterialTheme.colorScheme.surface 
+            else 
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(32.dp)
+                    .padding(end = 16.dp),
+                tint = if (enabled) 
+                    MaterialTheme.colorScheme.primary 
+                else 
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (enabled) description else "Coming in future updates",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+```
+
+**FocusScreen.kt:**
+```kotlin
+@Composable
+fun FocusScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Focus Mode",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier
+                .semantics { contentDescription = "Focus mode screen title" }
+                .padding(bottom = 24.dp)
+        )
+        
+        // Focus Status Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Filled.DoNotDisturb,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .padding(bottom = 16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Text(
+                    text = "Focus Mode Inactive",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "Block distracting apps and stay focused on your goals",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Quick Focus Options
+        Text(
+            text = "Quick Focus Sessions",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+        
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FocusOptionCard("15 minutes", "Short focus session", false)
+            }
+            item {
+                FocusOptionCard("30 minutes", "Standard work session", false)
+            }
+            item {
+                FocusOptionCard("1 hour", "Deep work session", false)
+            }
+            item {
+                FocusOptionCard("Custom", "Set your own duration", false)
+            }
+        }
+    }
+}
+
+@Composable
+fun FocusOptionCard(
+    duration: String,
+    description: String,
+    enabled: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.6f),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = duration,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = if (enabled) description else "Coming soon",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
+            
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = if (enabled) 
+                    MaterialTheme.colorScheme.primary 
+                else 
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            )
+        }
+    }
+}
+```
 ```
 
 #### 4. Room Database Setup
