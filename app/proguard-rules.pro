@@ -6,7 +6,7 @@
 -keep class * extends android.app.Activity
 -keep class * extends android.app.Service
 -keep class * extends android.content.BroadcastReceiver
--keep class * extends androidx.fragment.app.Fragment
+
 
 ###########################
 # Jetpack Compose
