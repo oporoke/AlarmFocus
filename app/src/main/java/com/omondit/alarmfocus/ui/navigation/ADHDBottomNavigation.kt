@@ -2,10 +2,10 @@ package com.omondit.alarmfocus.ui.navigation
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -31,7 +31,7 @@ fun ADHDBottomNavigation(
         NavigationBarItem(
             icon = {
                 Icon(
-                    Icons.Filled.Notifications,
+                    Icons.Filled.Alarm,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp) // Large touch targets
                 )
@@ -53,7 +53,7 @@ fun ADHDBottomNavigation(
         NavigationBarItem(
             icon = {
                 Icon(
-                    Icons.Filled.Build,
+                    Icons.Filled.Task,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp)
                 )
@@ -75,7 +75,7 @@ fun ADHDBottomNavigation(
         NavigationBarItem(
             icon = {
                 Icon(
-                    Icons.Filled.AddCircle,
+                    Icons.Filled.Block,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp)
                 )

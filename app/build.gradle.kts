@@ -41,6 +41,15 @@ android {
 }
 
 dependencies {
+    // Material 3 components
+    implementation(libs.material3)
+    implementation(libs.androidx.material3)
+    // Core Material icons (basic set)
+    implementation(libs.androidx.material.icons.core)
+
+
+    // Extended Material icons (needed for Alarm)
+    implementation(libs.androidx.material.icons.extended)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -49,7 +58,6 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

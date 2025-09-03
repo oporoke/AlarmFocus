@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -60,7 +60,7 @@ fun FocusScreen() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    Icons.Filled.Build,
+                    Icons.Filled.DoNotDisturb,
                     contentDescription = null,
                     modifier = Modifier
                         .size(48.dp)

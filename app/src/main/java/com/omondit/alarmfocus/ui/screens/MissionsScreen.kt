@@ -11,8 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -50,7 +53,7 @@ fun MissionsScreen() {
                 MissionCard(
                     title = "Math Challenge",
                     description = "Solve arithmetic problems to dismiss alarm",
-                    icon = Icons.Filled.AccountCircle,
+                    icon = Icons.Filled.Calculate,
                     enabled = false
                 )
             }
@@ -58,7 +61,7 @@ fun MissionsScreen() {
                 MissionCard(
                     title = "Barcode Scanner",
                     description = "Scan a specific barcode to turn off alarm",
-                    icon = Icons.Filled.Build,
+                    icon = Icons.Filled.QrCode2,
                     enabled = false
                 )
             }
@@ -66,7 +69,7 @@ fun MissionsScreen() {
                 MissionCard(
                     title = "Photo Verification",
                     description = "Take a photo matching your reference image",
-                    icon = Icons.Filled.Build,
+                    icon = Icons.Filled.PhotoCamera,
                     enabled = false
                 )
             }
@@ -74,7 +77,7 @@ fun MissionsScreen() {
                 MissionCard(
                     title = "Physical Activity",
                     description = "Complete jumping jacks or squats",
-                    icon = Icons.Filled.AccountCircle,
+                    icon = Icons.Filled.FitnessCenter,
                     enabled = false
                 )
             }
@@ -82,7 +85,7 @@ fun MissionsScreen() {
                 MissionCard(
                     title = "Motivational Quote",
                     description = "Type an inspirational quote accurately",
-                    icon = Icons.Filled.Build,
+                    icon = Icons.Filled.FormatQuote,
                     enabled = false
                 )
             }
