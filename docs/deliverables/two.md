@@ -1011,4 +1011,860 @@ class AlarmFailureRecovery {
 }
 ```
 
+---
+
+## Production-Ready Implementation
+
+### Complete Alarm Service Implementation
+```kotlin
+@Suppress("DEPRECATION")
+class AlarmForegroundService : Service() {
+    
+    companion object {
+        private const val NOTIFICATION_ID = 2001
+        private const val CHANNEL_ID = "alarm_service_channel"
+        private const val ACTION_DISMISS_ALARM = "com.adhdapp.DISMISS_ALARM"
+        private const val ACTION_SNOOZE_DISABLED = "com.adhdapp.SNOOZE_DISABLED"
+        
+        fun startAlarmService(context: Context, alarmConfig: AlarmConfig) {
+            val intent = Intent(context, AlarmForegroundService::class.java).apply {
+                putExtra("alarm_config", alarmConfig.toBundle())
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+    }
+    
+    private lateinit var alarmEngine: UltraLoudAlarmEngine
+    private lateinit var vibrationEngine: ADHDVibrationEngine
+    private lateinit var visualEngine: VisualAlarmStimulation
+    private lateinit var wakeUpMissionController: WakeUpMissionController
+    
+    private var currentAlarmConfig: AlarmConfig? = null
+    private var isAlarmActive = false
+    
+    override fun onCreate() {
+        super.onCreate()
+        
+        createNotificationChannel()
+        alarmEngine = UltraLoudAlarmEngine(this)
+        vibrationEngine = ADHDVibrationEngine(this)
+        visualEngine = VisualAlarmStimulation(this)
+        wakeUpMissionController = WakeUpMissionController(this)
+        
+        // Register for system events that might interfere with alarm
+        registerSystemEventReceivers()
+    }
+    
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val alarmConfig = intent?.getBundleExtra("alarm_config")?.let { 
+            AlarmConfig.fromBundle(it) 
+        }
+        
+        if (alarmConfig != null && !isAlarmActive) {
+            startAlarmSequence(alarmConfig)
+        }
+        
+        return START_STICKY // Restart if killed
+    }
+    
+    private fun startAlarmSequence(config: AlarmConfig) {
+        currentAlarmConfig = config
+        isAlarmActive = true
+        
+        // Start foreground notification to prevent service killing
+        startForeground(NOTIFICATION_ID, createAlarmNotification(config))
+        
+        // Initialize all alarm systems
+        initializeAlarmSystems(config)
+        
+        // Start the coordinated alarm experience
+        launchCoordinatedAlarmExperience(config)
+    }
+    
+    private fun initializeAlarmSystems(config: AlarmConfig) {
+        try {
+            // Initialize audio engine
+            val audioResult = alarmEngine.startAlarm(config.audioConfig)
+            if (audioResult != AlarmPlaybackResult.SUCCESS) {
+                handleAlarmSystemFailure("Audio engine failed", audioResult)
+            }
+            
+            // Initialize vibration patterns
+            vibrationEngine.startCoordinatedVibration(AudioPhase.RAMP_UP)
+            
+            // Initialize visual stimulation
+            if (config.enableVisualStimulation) {
+                visualEngine.startVisualAlarmStimulation()
+            }
+            
+        } catch (e: Exception) {
+            handleCriticalAlarmFailure(e, config)
+        }
+    }
+    
+    private fun launchCoordinatedAlarmExperience(config: AlarmConfig) {
+        // Create and launch the wake-up mission activity
+        val missionIntent = Intent(this, WakeUpMissionActivity::class.java).apply {
+            putExtra("alarm_config", config.toBundle())
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+            
+            // Ensure this appears over lock screen
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                addFlags(Intent.FLAG_ACTIVITY_SHOW_WHEN_LOCKED)
+                addFlags(Intent.FLAG_ACTIVITY_TURN_SCREEN_ON)
+            }
+        }
+        
+        startActivity(missionIntent)
+        
+        // Start alarm timeout monitoring
+        startAlarmTimeoutMonitoring(config)
+    }
+    
+    private fun startAlarmTimeoutMonitoring(config: AlarmConfig) {
+        val handler = Handler(Looper.getMainLooper())
+        
+        // Maximum alarm duration to prevent battery drain
+        val maxAlarmDuration = config.maxDurationMs ?: (30 * 60 * 1000L) // 30 minutes default
+        
+        handler.postDelayed({
+            if (isAlarmActive) {
+                // Auto-dismiss after maximum duration
+                handleAlarmTimeout(config)
+            }
+        }, maxAlarmDuration)
+        
+        // Escalation monitoring - increase intensity if not dismissed
+        handler.postDelayed({
+            if (isAlarmActive) {
+                escalateAlarmIntensity()
+            }
+        }, 2 * 60 * 1000L) // Escalate after 2 minutes
+    }
+    
+    private fun escalateAlarmIntensity() {
+        currentAlarmConfig?.let { config ->
+            // Increase audio volume to maximum
+            alarmEngine.escalateToMaximumVolume()
+            
+            // Switch to most annoying sound if available
+            val emergencySound = getEmergencyEscalationSound()
+            if (emergencySound != null) {
+                alarmEngine.switchToEmergencySound(emergencySound)
+            }
+            
+            // Increase vibration intensity
+            vibrationEngine.escalateVibrationIntensity()
+            
+            // Add additional visual stimulation
+            visualEngine.escalateVisualStimulation()
+            
+            // Log escalation for user analytics
+            AlarmAnalytics.logAlarmEscalation(config.id, "2_minute_escalation")
+        }
+    }
+    
+    private fun handleAlarmTimeout(config: AlarmConfig) {
+        // Log the timeout event
+        AlarmAnalytics.logAlarmTimeout(config.id, "max_duration_reached")
+        
+        // Gracefully stop all alarm systems
+        stopAllAlarmSystems()
+        
+        // Create emergency notification for missed alarm
+        createMissedAlarmNotification(config)
+        
+        // Stop the service
+        stopAlarmService()
+    }
+    
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "ADHD Alarm Service",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Critical service for ADHD alarm functionality"
+                enableLights(true)
+                lightColor = Color.RED
+                enableVibration(true)
+                setBypassDnd(true) // Critical for alarm functionality
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+            
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+    
+    private fun createAlarmNotification(config: AlarmConfig): Notification {
+        val dismissIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            Intent(ACTION_DISMISS_ALARM),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🚨 ADHD Alarm Active")
+            .setContentText("Complete your wake-up mission to dismiss")
+            .setSmallIcon(R.drawable.ic_alarm_active)
+            .setOngoing(true) // Cannot be swiped away
+            .setAutoCancel(false)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(
+                R.drawable.ic_alarm_off,
+                "Complete Mission",
+                dismissIntent
+            )
+            .setFullScreenIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, WakeUpMissionActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                ),
+                true
+            )
+            .build()
+    }
+    
+    fun dismissAlarm(missionCompletedSuccessfully: Boolean) {
+        if (!isAlarmActive) return
+        
+        isAlarmActive = false
+        
+        // Record alarm dismissal analytics
+        currentAlarmConfig?.let { config ->
+            AlarmAnalytics.logAlarmDismissal(
+                alarmId = config.id,
+                missionCompleted = missionCompletedSuccessfully,
+                dismissalTime = System.currentTimeMillis(),
+                totalAlarmDuration = System.currentTimeMillis() - config.startTime
+            )
+        }
+        
+        // Stop all alarm systems
+        stopAllAlarmSystems()
+        
+        // Show success feedback if mission completed
+        if (missionCompletedSuccessfully) {
+            showAlarmSuccessNotification()
+        }
+        
+        // Stop the service
+        stopAlarmService()
+    }
+    
+    private fun stopAllAlarmSystems() {
+        try {
+            alarmEngine.stopAlarm()
+            vibrationEngine.stopAllVibration()
+            visualEngine.stopVisualStimulation()
+            
+            // Restore original audio settings
+            restoreOriginalAudioSettings()
+            
+        } catch (e: Exception) {
+            Log.e("AlarmService", "Error stopping alarm systems", e)
+            // Continue with service shutdown even if cleanup fails
+        }
+    }
+    
+    private fun stopAlarmService() {
+        stopForeground(true)
+        stopSelf()
+    }
+    
+    override fun onBind(intent: Intent?): IBinder? = null
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        
+        if (isAlarmActive) {
+            // Service was killed while alarm was active - restart it
+            currentAlarmConfig?.let { config ->
+                startAlarmService(this, config)
+            }
+        }
+        
+        unregisterSystemEventReceivers()
+    }
+}
+```
+
+### Complete Wake-Up Mission Activity
+```kotlin
+class WakeUpMissionActivity : AppCompatActivity() {
+    
+    companion object {
+        private const val MISSION_TIMEOUT_MS = 10 * 60 * 1000L // 10 minutes
+    }
+    
+    private lateinit var missionController: WakeUpMissionController
+    private lateinit var alarmConfig: AlarmConfig
+    private var missionStartTime: Long = 0
+    private var currentMission: Mission? = null
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Ensure activity appears over lock screen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            keyguardManager.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+        
+        // Prevent user from leaving this activity
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        
+        setupMissionActivity()
+    }
+    
+    private fun setupMissionActivity() {
+        alarmConfig = intent.getBundleExtra("alarm_config")?.let {
+            AlarmConfig.fromBundle(it)
+        } ?: run {
+            // Fallback if no config provided
+            finish()
+            return
+        }
+        
+        missionStartTime = System.currentTimeMillis()
+        missionController = WakeUpMissionController(this)
+        
+        // Load user profile for mission personalization
+        val userProfile = ADHDProfileManager.getCurrentProfile(this)
+        
+        // Generate appropriate mission for current context
+        currentMission = missionController.generateOptimalMission(
+            userProfile = userProfile,
+            alarmConfig = alarmConfig,
+            timeOfDay = LocalTime.now(),
+            recentPerformance = getMissionPerformanceHistory()
+        )
+        
+        // Set up the UI
+        setContentView(R.layout.activity_wake_up_mission)
+        setupMissionUI()
+        
+        // Start mission timeout
+        startMissionTimeout()
+        
+        // Begin the mission
+        startMission()
+    }
+    
+    private fun setupMissionUI() {
+        // Prevent back button
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Show encouragement instead of allowing back navigation
+                showBackPressEncouragement()
+            }
+        })
+        
+        // Set up mission container
+        val missionContainer = findViewById<FrameLayout>(R.id.mission_container)
+        
+        // Add current mission UI
+        currentMission?.let { mission ->
+            val missionView = when (mission.type) {
+                MissionType.MATH_CHALLENGE -> createMathMissionUI(mission as MathMission)
+                MissionType.BARCODE_SCAN -> createBarcodeMissionUI(mission as BarcodeMission)
+                MissionType.PHOTO_VERIFICATION -> createPhotoMissionUI(mission as PhotoMission)
+                MissionType.PHYSICAL_ACTIVITY -> createPhysicalMissionUI(mission as MotionMission)
+                MissionType.TYPING_CHALLENGE -> createTypingMissionUI(mission as TypingMission)
+            }
+            
+            missionContainer.addView(missionView)
+        }
+        
+        // Set up progress indicators
+        setupProgressIndicators()
+    }
+    
+    private fun startMission() {
+        currentMission?.let { mission ->
+            missionController.startMission(
+                mission = mission,
+                onProgress = { progress -> updateMissionProgress(progress) },
+                onSuccess = { result -> handleMissionSuccess(result) },
+                onFailure = { error -> handleMissionFailure(error) },
+                onTimeout = { handleMissionTimeout() }
+            )
+        }
+    }
+    
+    private fun handleMissionSuccess(result: MissionResult) {
+        // Mission completed successfully!
+        val completionTime = System.currentTimeMillis() - missionStartTime
+        
+        // Record successful completion
+        MissionAnalytics.logMissionSuccess(
+            missionType = currentMission?.type,
+            completionTimeMs = completionTime,
+            difficulty = currentMission?.difficulty,
+            userProfile = ADHDProfileManager.getCurrentProfile(this)
+        )
+        
+        // Show success animation
+        showMissionSuccessAnimation(result)
+        
+        // Dismiss alarm
+        dismissAlarmAndFinish(true)
+    }
+    
+    private fun handleMissionFailure(error: MissionError) {
+        when (error.type) {
+            MissionErrorType.TOO_MANY_ATTEMPTS -> {
+                // Switch to easier mission or provide alternative
+                offerEasierMissionAlternative()
+            }
+            
+            MissionErrorType.TECHNICAL_FAILURE -> {
+                // Try backup mission type
+                switchToBackupMission(error)
+            }
+            
+            MissionErrorType.USER_FRUSTRATION_DETECTED -> {
+                // Provide emotional support and easier option
+                showFrustrationSupport()
+            }
+            
+            else -> {
+                // Generic failure handling
+                showMissionFailureGuidance(error)
+            }
+        }
+    }
+    
+    private fun offerEasierMissionAlternative() {
+        val dialog = AlertDialog.Builder(this, R.style.ADHDAlarmDialog)
+            .setTitle("Let's Try Something Easier")
+            .setMessage("This mission seems challenging right now. Would you like to try an easier wake-up task?")
+            .setPositiveButton("Yes, Please") { _, _ ->
+                switchToEasierMission()
+            }
+            .setNegativeButton("I'll Keep Trying") { dialog, _ ->
+                dialog.dismiss()
+                resetCurrentMission()
+            }
+            .setCancelable(false)
+            .create()
+        
+        dialog.show()
+    }
+    
+    private fun switchToEasierMission() {
+        val userProfile = ADHDProfileManager.getCurrentProfile(this)
+        val easierMission = missionController.generateEasierMission(
+            currentMission = currentMission!!,
+            userProfile = userProfile
+        )
+        
+        // Update UI for new mission
+        currentMission = easierMission
+        updateMissionUI(easierMission)
+        startMission()
+    }
+    
+    private fun startMissionTimeout() {
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (!isFinishing && currentMission != null) {
+                handleMissionTimeout()
+            }
+        }, MISSION_TIMEOUT_MS)
+    }
+    
+    private fun handleMissionTimeout() {
+        // After 10 minutes, provide emergency exit
+        showEmergencyExitDialog()
+    }
+    
+    private fun showEmergencyExitDialog() {
+        AlertDialog.Builder(this, R.style.ADHDEmergencyDialog)
+            .setTitle("⚠️ Emergency Wake-Up Option")
+            .setMessage("It's been 10 minutes. If you're truly awake and need to dismiss this alarm, you can do so now.\n\nAre you fully awake and ready to start your day?")
+            .setPositiveButton("Yes, I'm Awake") { _, _ ->
+                dismissAlarmAndFinish(false) // Mark as emergency dismissal
+            }
+            .setNegativeButton("Give Me More Time") { dialog, _ ->
+                dialog.dismiss()
+                // Extend timeout by 5 more minutes
+                extendMissionTimeout()
+            }
+            .setCancelable(false)
+            .create()
+            .show()
+    }
+    
+    private fun dismissAlarmAndFinish(missionCompleted: Boolean) {
+        // Notify alarm service to stop
+        val serviceIntent = Intent(this, AlarmForegroundService::class.java)
+        stopService(serviceIntent)
+        
+        // Send dismissal broadcast
+        val dismissIntent = Intent("com.adhdapp.ALARM_DISMISSED").apply {
+            putExtra("mission_completed", missionCompleted)
+            putExtra("alarm_id", alarmConfig.id)
+        }
+        sendBroadcast(dismissIntent)
+        
+        // Show completion message
+        if (missionCompleted) {
+            Toast.makeText(this, "Great job! Have an amazing day! 🌟", Toast.LENGTH_LONG).show()
+        }
+        
+        // Finish activity
+        finish()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        
+        // Clean up any ongoing mission resources
+        currentMission?.cleanup()
+        missionController.cleanup()
+    }
+}
+```
+
+### Complete Audio Engine Implementation
+```kotlin
+class UltraLoudAlarmEngine(private val context: Context) {
+    
+    private var mediaPlayer: MediaPlayer? = null
+    private var audioManager: AudioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var originalStreamVolumes: Map<Int, Int> = emptyMap()
+    private var originalRingerMode: Int = AudioManager.RINGER_MODE_NORMAL
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    
+    private val audioStreams = listOf(
+        AudioManager.STREAM_ALARM,
+        AudioManager.STREAM_MUSIC,
+        AudioManager.STREAM_NOTIFICATION,
+        AudioManager.STREAM_RING
+    )
+    
+    fun startAlarm(config: AlarmAudioConfig): AlarmPlaybackResult {
+        return try {
+            // Step 1: Acquire system resources
+            acquireSystemResources()
+            
+            // Step 2: Store original settings
+            storeOriginalAudioSettings()
+            
+            // Step 3: Override system limitations
+            overrideSystemAudioLimitations()
+            
+            // Step 4: Initialize media player
+            initializeMediaPlayer(config)
+            
+            // Step 5: Start progressive volume playback
+            startProgressiveVolumePlayback(config)
+            
+            AlarmPlaybackResult.SUCCESS
+            
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Failed to start alarm", e)
+            handleAlarmStartFailure(e, config)
+        }
+    }
+    
+    private fun acquireSystemResources() {
+        // Acquire wake lock
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK or
+            PowerManager.ACQUIRE_CAUSES_WAKEUP or
+            PowerManager.ON_AFTER_RELEASE,
+            "ADHDAlarm::AlarmWakeLock"
+        ).apply {
+            acquire(30 * 60 * 1000L) // 30 minutes maximum
+        }
+        
+        // Request audio focus
+        requestAudioFocus()
+    }
+    
+    @SuppressLint("NewApi")
+    private fun requestAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(false)
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener { focusChange ->
+                    handleAudioFocusChange(focusChange)
+                }
+                .build()
+            
+            audioManager.requestAudioFocus(audioFocusRequest!!)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                { focusChange -> handleAudioFocusChange(focusChange) },
+                AudioManager.STREAM_ALARM,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+    }
+    
+    private fun handleAudioFocusChange(focusChange: Int) {
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                // Never give up audio focus during alarm
+                requestAudioFocus()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // Regain focus immediately
+                requestAudioFocus()
+            }
+        }
+    }
+    
+    private fun storeOriginalAudioSettings() {
+        originalRingerMode = audioManager.ringerMode
+        originalStreamVolumes = audioStreams.associateWith { stream ->
+            audioManager.getStreamVolume(stream)
+        }
+    }
+    
+    private fun overrideSystemAudioLimitations() {
+        // Set ringer mode to normal
+        audioManager.ringerMode = AudioManager.RINGER_MODE_NORMAL
+        
+        // Set all relevant streams to maximum volume
+        audioStreams.forEach { streamType ->
+            val maxVolume = audioManager.getStreamMaxVolume(streamType)
+            audioManager.setStreamVolume(streamType, maxVolume, 0)
+        }
+        
+        // Try to override Do Not Disturb if we have permission
+        if (hasDoNotDisturbAccess()) {
+            overrideDoNotDisturbMode()
+        }
+    }
+    
+    private fun hasDoNotDisturbAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.isNotificationPolicyAccessGranted
+        } else {
+            true
+        }
+    }
+    
+    @SuppressLint("NewApi")
+    private fun overrideDoNotDisturbMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            // Create alarm-friendly policy
+            val policy = NotificationManager.Policy(
+                NotificationManager.Policy.PRIORITY_CATEGORY_ALARMS,
+                NotificationManager.Policy.PRIORITY_SENDERS_ANY,
+                NotificationManager.Policy.PRIORITY_SENDERS_ANY
+            )
+            
+            notificationManager.notificationPolicy = policy
+            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        }
+    }
+    
+    private fun initializeMediaPlayer(config: AlarmAudioConfig) {
+        mediaPlayer = MediaPlayer().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            
+            // Set data source
+            setDataSource(context, config.soundUri)
+            
+            // Configure for maximum reliability
+            isLooping = true
+            
+            // Prepare synchronously to avoid delays
+            prepare()
+            
+            // Set initial volume
+            val startVolume = config.startVolumePercent / 100f
+            setVolume(startVolume, startVolume)
+        }
+    }
+    
+    private fun startProgressiveVolumePlayback(config: AlarmAudioConfig) {
+        mediaPlayer?.start()
+        
+        // Implement progressive volume increase
+        val handler = Handler(Looper.getMainLooper())
+        val startVolume = config.startVolumePercent
+        val maxVolume = config.maxVolumePercent
+        val rampDuration = config.rampUpDurationMs
+        val updateInterval = 500L // Update every 500ms
+        val totalSteps = (rampDuration / updateInterval).toInt()
+        
+        for (step in 0..totalSteps) {
+            handler.postDelayed({
+                if (mediaPlayer?.isPlaying == true) {
+                    val progress = step.toFloat() / totalSteps
+                    val currentVolume = startVolume + (maxVolume - startVolume) * progress
+                    val volumeFloat = (currentVolume / 100f).coerceIn(0f, 1f)
+                    
+                    mediaPlayer?.setVolume(volumeFloat, volumeFloat)
+                }
+            }, step * updateInterval)
+        }
+    }
+    
+    fun escalateToMaximumVolume() {
+        mediaPlayer?.setVolume(1.0f, 1.0f)
+        
+        // Also ensure system volume is at maximum
+        audioStreams.forEach { streamType ->
+            val maxVolume = audioManager.getStreamMaxVolume(streamType)
+            audioManager.setStreamVolume(streamType, maxVolume, 0)
+        }
+    }
+    
+    fun switchToEmergencySound(emergencySound: Uri) {
+        try {
+            mediaPlayer?.apply {
+                stop()
+                reset()
+                setDataSource(context, emergencySound)
+                prepare()
+                isLooping = true
+                setVolume(1.0f, 1.0f)
+                start()
+            }
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Failed to switch to emergency sound", e)
+            // Continue with current sound
+        }
+    }
+    
+    fun stopAlarm() {
+        try {
+            mediaPlayer?.apply {
+                if (isPlaying) {
+                    stop()
+                }
+                release()
+            }
+            mediaPlayer = null
+            
+            // Release audio focus
+            releaseAudioFocus()
+            
+            // Release wake lock
+            wakeLock?.apply {
+                if (isHeld) {
+                    release()
+                }
+            }
+            wakeLock = null
+            
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Error stopping alarm", e)
+        }
+    }
+    
+    private fun releaseAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { request ->
+                audioManager.abandonAudioFocusRequest(request)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus { /* No-op */ }
+        }
+    }
+    
+    fun restoreOriginalAudioSettings() {
+        try {
+            // Restore ringer mode
+            audioManager.ringerMode = originalRingerMode
+            
+            // Restore stream volumes
+            originalStreamVolumes.forEach { (stream, volume) ->
+                audioManager.setStreamVolume(stream, volume, 0)
+            }
+            
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Error restoring audio settings", e)
+        }
+    }
+    
+    private fun handleAlarmStartFailure(error: Exception, config: AlarmAudioConfig): AlarmPlaybackResult {
+        Log.e("AlarmEngine", "Alarm start failed", error)
+        
+        // Try fallback methods
+        return tryFallbackAlarmMethods(config)
+    }
+    
+    private fun tryFallbackAlarmMethods(config: AlarmAudioConfig): AlarmPlaybackResult {
+        // Fallback 1: Try system alarm sound
+        try {
+            val defaultAlarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            val fallbackConfig = config.copy(soundUri = defaultAlarmUri)
+            return startBasicAlarm(fallbackConfig)
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Fallback 1 failed", e)
+        }
+        
+        // Fallback 2: Try notification sound
+        try {
+            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val fallbackConfig = config.copy(soundUri = notificationUri)
+            return startBasicAlarm(fallbackConfig)
+        } catch (e: Exception) {
+            Log.e("AlarmEngine", "Fallback 2 failed", e)
+        }
+        
+        return AlarmPlaybackResult.COMPLETE_FAILURE
+    }
+    
+    private fun startBasicAlarm(config: AlarmAudioConfig): AlarmPlaybackResult {
+        return try {
+            initializeMediaPlayer(config)
+            mediaPlayer?.start()
+            AlarmPlaybackResult.FALLBACK_SUCCESS
+        } catch (e: Exception) {
+            AlarmPlaybackResult.FAILURE(e.message ?: "Unknown error")
+        }
+    }
+}
+```
+
 This comprehensive deep-dive into the Ultra-Loud Alarm Engine shows the sophisticated audio engineering and system integration required to create an alarm that can reliably wake ADHD users while working within Android's security constraints and handling numerous edge cases.
