@@ -92,7 +92,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
 
     // Permissions
-    implementation(libs.androidx.activity.result)
+//    implementation(libs.androidx.activity.result)
 
     // Media handling
     implementation(libs.androidx.media)
