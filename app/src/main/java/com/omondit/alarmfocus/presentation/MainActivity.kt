@@ -1,4 +1,4 @@
-package com.omondit.alarmfocus
+package com.omondit.alarmfocus.presentation
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -6,24 +6,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.omondit.alarmfocus.ui.navigation.ADHDBottomNavigation
-import com.omondit.alarmfocus.ui.screens.AlarmsScreen
-import com.omondit.alarmfocus.ui.screens.FocusScreen
-import com.omondit.alarmfocus.ui.screens.MissionsScreen
-import com.omondit.alarmfocus.ui.screens.SettingsScreen
-import com.omondit.alarmfocus.ui.theme.AlarmFocusTheme
+import com.omondit.alarmfocus.presentation.ui.navigation.ADHDBottomNavigation
+import com.omondit.alarmfocus.presentation.ui.screens.AlarmsScreen
+import com.omondit.alarmfocus.presentation.ui.screens.FocusScreen
+import com.omondit.alarmfocus.presentation.ui.screens.MissionsScreen
+import com.omondit.alarmfocus.presentation.ui.screens.SettingsScreen
+import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

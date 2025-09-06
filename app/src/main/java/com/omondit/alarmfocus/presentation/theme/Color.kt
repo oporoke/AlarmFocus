@@ -1,4 +1,4 @@
-package com.omondit.alarmfocus.ui.theme
+package com.omondit.alarmfocus.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 

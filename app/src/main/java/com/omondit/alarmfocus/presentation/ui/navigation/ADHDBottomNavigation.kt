@@ -1,4 +1,4 @@
-package com.omondit.alarmfocus.ui.navigation
+package com.omondit.alarmfocus.presentation.ui.navigation
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons

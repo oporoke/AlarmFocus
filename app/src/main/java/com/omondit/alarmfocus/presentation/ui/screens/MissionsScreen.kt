@@ -1,4 +1,4 @@
-package com.omondit.alarmfocus.ui.screens
+package com.omondit.alarmfocus.presentation.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

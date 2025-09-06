@@ -1,4 +1,4 @@
-package com.omondit.alarmfocus.ui.theme
+package com.omondit.alarmfocus.presentation.theme
 
 import android.app.Activity
 import android.os.Build
