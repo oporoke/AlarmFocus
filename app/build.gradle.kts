@@ -84,4 +84,16 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.barcode.scanning)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Work Manager (for background tasks)
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Permissions
+    implementation(libs.androidx.activity.result)
+
+    // Media handling
+    implementation(libs.androidx.media)
 }
