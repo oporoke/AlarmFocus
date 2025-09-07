@@ -1,9 +1,12 @@
 package com.omondit.alarmfocus.presentation
 
+import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -15,21 +18,38 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.omondit.alarmfocus.data.database.AppDatabase
+import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
 import com.omondit.alarmfocus.presentation.ui.navigation.ADHDBottomNavigation
 import com.omondit.alarmfocus.presentation.ui.screens.AlarmsScreen
 import com.omondit.alarmfocus.presentation.ui.screens.FocusScreen
 import com.omondit.alarmfocus.presentation.ui.screens.MissionsScreen
 import com.omondit.alarmfocus.presentation.ui.screens.SettingsScreen
 import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
+import com.omondit.alarmfocus.presentation.viewmodel.AlarmViewModel
+import com.omondit.alarmfocus.utils.AlarmScheduler
+import com.omondit.alarmfocus.utils.PermissionManager
 
 class MainActivity : ComponentActivity() {
+    private lateinit var permissionManager: PermissionManager
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Initialize permission manager
+        permissionManager = PermissionManager(this)
+
+        // Request permissions first
+        if (!permissionManager.areAllPermissionsGranted()) {
+            permissionManager.requestAllPermissions()
+        }
+
+
         setContent {
             AlarmFocusTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ADHDAlarmApp()
+                    ADHDAlarmApp(this)
                 }
             }
         }
@@ -39,10 +59,16 @@ class MainActivity : ComponentActivity() {
 
 
 @Composable
-fun ADHDAlarmApp() {
+fun ADHDAlarmApp(context: Context) {
     val navController = rememberNavController()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route ?: "alarms"
+    // Initialize dependencies
+    val database = AppDatabase.getDatabase(context)
+    val repository = AlarmRepositoryImpl(database.alarmDao())
+    val scheduler = AlarmScheduler(context)
+    // Create ViewModel with dependencies
+    val viewModel = AlarmViewModel(repository, scheduler)
 
     Scaffold(
         bottomBar = {
@@ -65,7 +91,7 @@ fun ADHDAlarmApp() {
             startDestination = "alarms",
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable("alarms") { AlarmsScreen() }
+            composable("alarms") { AlarmsScreen(viewModel) }
             composable("missions") { MissionsScreen() }
             composable("focus") { FocusScreen() }
             composable("settings") { SettingsScreen() }

@@ -17,9 +17,12 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
+import com.omondit.alarmfocus.data.database.AppDatabase
+import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -50,7 +53,9 @@ class AlarmService : Service() {
     private var audioManager: AudioManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var volumeRampJob: Job? = null
-    private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
+//    private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private lateinit var alarmRepository: AlarmRepositoryImpl
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var originalAlarmVolume: Int = 0
     private var originalRingerMode: Int = 0
@@ -58,6 +63,11 @@ class AlarmService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Initialize repository
+        val database = AppDatabase.getDatabase(this)
+        alarmRepository = AlarmRepositoryImpl(database.alarmDao())
+
+        // Existing code...
         createNotificationChannel()
         initializeSystemServices()
     }
@@ -67,13 +77,30 @@ class AlarmService : Service() {
             ACTION_START_ALARM -> {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
+
+                // INTEGRATION: Mark alarm as triggered in database
+                if (alarmId != -1L) {
+                    serviceScope.launch {
+                        alarmRepository.markAlarmTriggered(alarmId)
+                    }
+                }
+
                 startAlarm(alarmId, soundUri)
             }
             ACTION_STOP_ALARM -> {
+                val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+
+                // INTEGRATION: Mark alarm as dismissed in database
+                if (alarmId != -1L) {
+                    serviceScope.launch {
+                        alarmRepository.markAlarmDismissed(alarmId)
+                    }
+                }
+
                 stopAlarm()
             }
         }
-        return START_STICKY // Restart if killed
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
