@@ -12,7 +12,6 @@ class TriggerAlarmUseCase(
     suspend operator fun invoke(alarmId: Long) {
         val alarm = alarmRepository.getAlarmById(alarmId)
         if (alarm != null && alarm.isEnabled) {
-
             // Mark as triggered in database
             alarmRepository.markAlarmTriggered(alarmId)
 

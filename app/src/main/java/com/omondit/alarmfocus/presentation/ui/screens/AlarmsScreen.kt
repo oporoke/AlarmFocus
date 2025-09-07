@@ -52,7 +52,6 @@ fun AlarmsScreen(
     // Show test alarm creation dialog
     var showCreateDialog by remember { mutableStateOf(false) }
 
-
     Column(
         modifier = modifier
             .fillMaxSize()

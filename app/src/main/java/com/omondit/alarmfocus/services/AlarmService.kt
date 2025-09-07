@@ -19,6 +19,7 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.omondit.alarmfocus.data.database.AppDatabase
 import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,7 +27,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.min
 
 /**
  * Ultra-Loud Alarm Service
@@ -53,6 +53,7 @@ class AlarmService : Service() {
     private var audioManager: AudioManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var volumeRampJob: Job? = null
+
 //    private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var alarmRepository: AlarmRepositoryImpl
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -109,7 +110,8 @@ class AlarmService : Service() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            val vibratorManager =
+                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
             vibratorManager.defaultVibrator
         } else {
             @Suppress("DEPRECATION")
@@ -193,7 +195,11 @@ class AlarmService : Service() {
                 } else {
                     // Use default ultra-annoying alarm sound
                     val descriptor = assets.openFd("default_alarm_ultra_loud.mp3")
-                    setDataSource(descriptor.fileDescriptor, descriptor.startOffset, descriptor.length)
+                    setDataSource(
+                        descriptor.fileDescriptor,
+                        descriptor.startOffset,
+                        descriptor.length
+                    )
                     descriptor.close()
                 }
 
@@ -284,7 +290,8 @@ class AlarmService : Service() {
     private fun startVolumeRamping() {
         volumeRampJob = serviceScope.launch {
             val stepDelay = VOLUME_RAMP_DURATION / VOLUME_RAMP_STEPS
-            val volumeIncrement = (MAX_VOLUME_PERCENTAGE - INITIAL_VOLUME_PERCENTAGE) / VOLUME_RAMP_STEPS
+            val volumeIncrement = (MAX_VOLUME_PERCENTAGE - INITIAL_VOLUME_PERCENTAGE) /
+                VOLUME_RAMP_STEPS
 
             for (step in 1..VOLUME_RAMP_STEPS) {
                 delay(stepDelay)

@@ -53,7 +53,8 @@ class PermissionManager(private val activity: ComponentActivity) {
     fun requestAllPermissions() {
         // Step 1: Request standard permissions
         val missingPermissions = REQUIRED_PERMISSIONS.filter { permission ->
-            ContextCompat.checkSelfPermission(activity, permission) != PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(activity, permission) !=
+                PackageManager.PERMISSION_GRANTED
         }.toTypedArray()
 
         if (missingPermissions.isNotEmpty()) {
@@ -81,7 +82,8 @@ class PermissionManager(private val activity: ComponentActivity) {
 
     private fun hasDndPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val notificationManager = activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = activity.getSystemService(Context.NOTIFICATION_SERVICE)
+                as NotificationManager
             notificationManager.isNotificationPolicyAccessGranted
         } else {
             true
@@ -90,7 +92,8 @@ class PermissionManager(private val activity: ComponentActivity) {
 
     private fun hasExactAlarmPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager = activity.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val alarmManager = activity.getSystemService(Context.ALARM_SERVICE)
+                as android.app.AlarmManager
             alarmManager.canScheduleExactAlarms()
         } else {
             true
@@ -151,7 +154,8 @@ class PermissionManager(private val activity: ComponentActivity) {
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun areAllPermissionsGranted(): Boolean {
         val standardPermissions = REQUIRED_PERMISSIONS.all { permission ->
-            ContextCompat.checkSelfPermission(activity, permission) == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(activity, permission) ==
+                PackageManager.PERMISSION_GRANTED
         }
 
         return standardPermissions && hasDndPermission() && hasExactAlarmPermission()
@@ -173,7 +177,9 @@ class PermissionManager(private val activity: ComponentActivity) {
         }
 
         REQUIRED_PERMISSIONS.forEach { permission ->
-            if (ContextCompat.checkSelfPermission(activity, permission) != PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(activity, permission) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
                 val description = when (permission) {
                     Manifest.permission.WAKE_LOCK -> "Keeps alarm active when screen is off"
                     Manifest.permission.VIBRATE -> "Provides vibration alerts"

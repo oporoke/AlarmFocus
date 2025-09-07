@@ -27,7 +27,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
-
 @Composable
 fun SettingsScreen() {
     var darkMode by remember { mutableStateOf(false) }
@@ -124,7 +123,8 @@ fun SettingsSwitchItem(
             .clickable { onCheckedChange(!checked) }
             .padding(vertical = 12.dp)
             .semantics(mergeDescendants = true) {
-                contentDescription = "$title. $description. ${if (checked) "Enabled" else "Disabled"}"
+                contentDescription =
+                    "$title. $description. ${if (checked) "Enabled" else "Disabled"}"
             },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically

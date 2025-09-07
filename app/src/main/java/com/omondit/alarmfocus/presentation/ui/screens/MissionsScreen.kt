@@ -105,10 +105,11 @@ fun MissionCard(
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.6f),
         colors = CardDefaults.cardColors(
-            containerColor = if (enabled)
+            containerColor = if (enabled) {
                 MaterialTheme.colorScheme.surface
-            else
+            } else {
                 MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+            }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -124,10 +125,11 @@ fun MissionCard(
                 modifier = Modifier
                     .size(32.dp)
                     .padding(end = 16.dp),
-                tint = if (enabled)
+                tint = if (enabled) {
                     MaterialTheme.colorScheme.primary
-                else
+                } else {
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                }
             )
 
             Column(modifier = Modifier.weight(1f)) {

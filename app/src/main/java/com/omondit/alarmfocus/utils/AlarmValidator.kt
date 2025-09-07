@@ -59,7 +59,9 @@ class AlarmValidator(private val context: Context) {
             retriever.setDataSource(context, uri)
 
             // Check duration
-            val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            val durationStr = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION
+            )
             val duration = durationStr?.toLongOrNull() ?: 0L
 
             if (duration == 0L) {
@@ -69,7 +71,10 @@ class AlarmValidator(private val context: Context) {
                     errors.add("Audio file is too short (minimum 1 second required)")
                 }
                 if (duration > MAX_SOUND_DURATION_MS) {
-                    warnings.add("Audio file is very long (${duration / 1000}s). Consider shorter files for better performance.")
+                    warnings.add(
+                        "Audio file is very long (${duration / 1000}s). " +
+                            "Consider shorter files for better performance."
+                    )
                 }
             }
 
@@ -93,7 +98,6 @@ class AlarmValidator(private val context: Context) {
             }
 
             retriever.release()
-
         } catch (e: Exception) {
             Log.e(TAG, "Error validating sound file", e)
             errors.add("Unable to validate audio file: ${e.message}")
@@ -115,7 +119,8 @@ class AlarmValidator(private val context: Context) {
         val warnings = mutableListOf<String>()
 
         // Check battery optimization
-        val powerManager = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val powerManager = context.getSystemService(Context.POWER_SERVICE)
+            as android.os.PowerManager
         if (!powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
             warnings.add("Battery optimization is enabled. This may affect alarm reliability.")
         }
@@ -124,7 +129,9 @@ class AlarmValidator(private val context: Context) {
         val availableSpace = File(context.filesDir.absolutePath).freeSpace
         val availableSpaceMB = availableSpace / (1024 * 1024)
         if (availableSpaceMB < 50) {
-            warnings.add("Low storage space (${availableSpaceMB}MB available). Consider freeing up space.")
+            warnings.add(
+                "Low storage space (${availableSpaceMB}MB available). Consider freeing up space."
+            )
         }
 
         // Check if alarm permissions are properly set
@@ -156,7 +163,9 @@ class AlarmValidator(private val context: Context) {
         }
 
         // Check for potentially confusing characters
-        val problematicChars = label.filter { it.isISOControl() || it.category == CharCategory.FORMAT }
+        val problematicChars = label.filter {
+            it.isISOControl() || it.category == CharCategory.FORMAT
+        }
         if (problematicChars.isNotEmpty()) {
             errors.add("Label contains invalid characters")
         }

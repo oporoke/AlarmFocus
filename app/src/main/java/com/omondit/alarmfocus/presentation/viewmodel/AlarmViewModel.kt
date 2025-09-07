@@ -20,7 +20,6 @@ class AlarmViewModel(
     private val _uiState = MutableStateFlow(AlarmUiState())
     val uiState = _uiState.asStateFlow()
 
-
     // Observe all alarms from database
     val alarms: StateFlow<List<AlarmEntity>> = alarmRepository.getAllAlarms()
         .stateIn(
@@ -55,7 +54,6 @@ class AlarmViewModel(
                     message = "Alarm created successfully",
                     isLoading = false
                 )
-
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "Failed to create alarm: ${e.message}",
@@ -76,7 +74,6 @@ class AlarmViewModel(
                 } else {
                     alarmScheduler.cancelAlarm(updatedAlarm.id)
                 }
-
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "Failed to toggle alarm: ${e.message}"
@@ -94,7 +91,6 @@ class AlarmViewModel(
                 _uiState.value = _uiState.value.copy(
                     message = "Alarm deleted"
                 )
-
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     error = "Failed to delete alarm: ${e.message}"

@@ -18,7 +18,7 @@ class AudioManagerHelper(private val context: Context) {
     fun hasDndOverridePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE)
-                    as android.app.NotificationManager
+                as android.app.NotificationManager
             notificationManager.isNotificationPolicyAccessGranted
         } else {
             true // No DND on older versions

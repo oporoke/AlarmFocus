@@ -47,11 +47,8 @@ dependencies {
     implementation(libs.androidx.material3)
     // Core Material icons (basic set)
     implementation(libs.androidx.material.icons.core)
-
-
     // Extended Material icons (needed for Alarm)
     implementation(libs.androidx.material.icons.extended)
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -66,34 +63,25 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
     // Navigation
     implementation(libs.androidx.navigation.compose)
-
     // Room Database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-
-
     // ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.barcode.scanning)
     implementation(libs.androidx.work.runtime.ktx)
-
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
-
     // Work Manager (for background tasks)
     implementation(libs.androidx.work.runtime.ktx)
-
     // Permissions
 //    implementation(libs.androidx.activity.result)
-
     // Media handling
     implementation(libs.androidx.media)
 }

@@ -20,18 +20,19 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.omondit.alarmfocus.data.database.AppDatabase
 import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 import com.omondit.alarmfocus.presentation.ui.navigation.ADHDBottomNavigation
 import com.omondit.alarmfocus.presentation.ui.screens.AlarmsScreen
 import com.omondit.alarmfocus.presentation.ui.screens.FocusScreen
 import com.omondit.alarmfocus.presentation.ui.screens.MissionsScreen
 import com.omondit.alarmfocus.presentation.ui.screens.SettingsScreen
-import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 import com.omondit.alarmfocus.presentation.viewmodel.AlarmViewModel
 import com.omondit.alarmfocus.utils.AlarmScheduler
 import com.omondit.alarmfocus.utils.PermissionManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var permissionManager: PermissionManager
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,7 +46,6 @@ class MainActivity : ComponentActivity() {
             permissionManager.requestAllPermissions()
         }
 
-
         setContent {
             AlarmFocusTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -55,8 +55,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
-
 
 @Composable
 fun ADHDAlarmApp(context: Context) {

@@ -153,10 +153,11 @@ fun FocusOptionCard(
             Icon(
                 Icons.Filled.PlayArrow,
                 contentDescription = null,
-                tint = if (enabled)
+                tint = if (enabled) {
                     MaterialTheme.colorScheme.primary
-                else
+                } else {
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                }
             )
         }
     }

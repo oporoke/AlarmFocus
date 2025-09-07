@@ -7,7 +7,6 @@ import androidx.room.RoomDatabase
 import com.omondit.alarmfocus.data.database.dao.AlarmDao
 import com.omondit.alarmfocus.data.database.entities.AlarmEntity
 
-
 @Database(
     entities = [AlarmEntity::class],
     version = 1,

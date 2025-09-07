@@ -17,7 +17,6 @@ class AlarmRepositoryImpl(
         return alarmDao.getAllAlarmsOnce()
     }
 
-
     override suspend fun getAlarmById(id: Long): AlarmEntity? {
         return alarmDao.getAlarmById(id)
     }

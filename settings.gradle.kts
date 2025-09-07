@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "AlarmFocus"
 include(":app")
- 
