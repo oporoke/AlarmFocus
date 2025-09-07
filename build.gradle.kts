@@ -4,6 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     id("org.jlleitschuh.gradle.ktlint") version "11.6.1"
+    id("io.gitlab.arturbosch.detekt") version "1.23.1"
+}
+
+apply(plugin = "io.gitlab.arturbosch.detekt")
+detekt {
+    parallel = true
+    config.setFrom(files("${project.rootDir}/config/detekt/detekt. yml"))
 }
 
 subprojects {
