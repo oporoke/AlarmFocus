@@ -27,7 +27,6 @@ jobs:
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug
-        working-directory: ./AlarmFocus
 
       - name: Run ktlintCheck
         run: ./gradlew ktlintCheck
