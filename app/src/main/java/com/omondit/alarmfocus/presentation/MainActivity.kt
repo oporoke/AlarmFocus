@@ -20,6 +20,11 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.omondit.alarmfocus.data.database.AppDatabase
 import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.di.AppModule
+import com.omondit.alarmfocus.domain.usecase.CreateAlarmUseCase
+import com.omondit.alarmfocus.domain.usecase.DeleteAlarmUseCase
+import com.omondit.alarmfocus.domain.usecase.GetUpcomingAlarmsUseCase
+import com.omondit.alarmfocus.domain.usecase.ToggleAlarmUseCase
 import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 import com.omondit.alarmfocus.presentation.ui.navigation.ADHDBottomNavigation
 import com.omondit.alarmfocus.presentation.ui.screens.AlarmsScreen
@@ -28,9 +33,12 @@ import com.omondit.alarmfocus.presentation.ui.screens.MissionsScreen
 import com.omondit.alarmfocus.presentation.ui.screens.SettingsScreen
 import com.omondit.alarmfocus.presentation.viewmodel.AlarmViewModel
 import com.omondit.alarmfocus.utils.AlarmScheduler
+import com.omondit.alarmfocus.utils.AlarmValidator
 import com.omondit.alarmfocus.utils.PermissionManager
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var appModule: AppModule
     private lateinit var permissionManager: PermissionManager
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -40,11 +48,11 @@ class MainActivity : ComponentActivity() {
 
         // Initialize permission manager
         permissionManager = PermissionManager(this)
+        appModule = AppModule(this)
 
-        // Request permissions first
-        if (!permissionManager.areAllPermissionsGranted()) {
-            permissionManager.requestAllPermissions()
-        }
+        // Request permissions if needed
+        checkAndRequestPermissions()
+
 
         setContent {
             AlarmFocusTheme {
@@ -54,8 +62,22 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun checkAndRequestPermissions() {
+        if (!permissionManager.areAllPermissionsGranted()) {
+            permissionManager.requestAllPermissions()
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    override fun onResume() {
+        super.onResume()
+        // Check permissions again in case user granted them in settings
+        checkAndRequestPermissions()
+    }
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @Composable
 fun ADHDAlarmApp(context: Context) {
     val navController = rememberNavController()
@@ -65,8 +87,16 @@ fun ADHDAlarmApp(context: Context) {
     val database = AppDatabase.getDatabase(context)
     val repository = AlarmRepositoryImpl(database.alarmDao())
     val scheduler = AlarmScheduler(context)
+    val validator = AlarmValidator(context)
+    val createAlarmUseCase = CreateAlarmUseCase(repository,scheduler,validator)
+    val toggleAlarmUseCase = ToggleAlarmUseCase(repository,scheduler)
+    val deleteAlarmUseCase = DeleteAlarmUseCase(repository,scheduler)
+    val getUpcomingAlarmUseCase = GetUpcomingAlarmsUseCase(repository)
     // Create ViewModel with dependencies
-    val viewModel = AlarmViewModel(repository, scheduler)
+    val viewModel = AlarmViewModel(
+        repository, createAlarmUseCase,toggleAlarmUseCase,
+        deleteAlarmUseCase,getUpcomingAlarmUseCase
+    )
 
     Scaffold(
         bottomBar = {
@@ -89,7 +119,16 @@ fun ADHDAlarmApp(context: Context) {
             startDestination = "alarms",
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable("alarms") { AlarmsScreen(viewModel) }
+            composable("alarms") {
+                AlarmsScreen(
+                    viewModel = viewModel,
+                    onNavigateToCreate = {
+                        // TODO: Navigate to detailed create screen
+                        // For now, the dialog in AlarmsScreen handles this
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             composable("missions") { MissionsScreen() }
             composable("focus") { FocusScreen() }
             composable("settings") { SettingsScreen() }
