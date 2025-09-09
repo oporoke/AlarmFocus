@@ -53,7 +53,6 @@ class MainActivity : ComponentActivity() {
         // Request permissions if needed
         checkAndRequestPermissions()
 
-
         setContent {
             AlarmFocusTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->

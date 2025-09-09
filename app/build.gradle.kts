@@ -83,8 +83,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     // Work Manager (for background tasks)
     implementation(libs.androidx.work.runtime.ktx)
-    // Permissions
-//    implementation(libs.androidx.activity.result)
     // Media handling
     implementation(libs.androidx.media)
+    // Work Manager
+    implementation(libs.androidx.work.runtime.ktx)
+    // Permissions
+    implementation(libs.accompanist.permissions)
+    // JSON handling
+    implementation(libs.kotlinx.serialization.json)
 }
