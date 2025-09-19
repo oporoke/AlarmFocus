@@ -91,4 +91,7 @@ dependencies {
     implementation(libs.accompanist.permissions)
     // JSON handling
     implementation(libs.kotlinx.serialization.json)
+
+    //handle permissions Compose UI:
+    implementation(libs.accompanist.permissions)
 }

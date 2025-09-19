@@ -2,9 +2,8 @@ package com.omondit.alarmfocus.domain.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
-import java.util.Calendar
 import org.json.JSONArray
-import java.util.*
+import java.util.Calendar
 
 @Parcelize
 data class RepeatSchedule(

@@ -56,7 +56,7 @@ class AlarmViewModel(
             initialValue = emptyList()
         )
 
-    // Quick stats
+    // Quick stats - Alternative implementation if combine doesn't work
     val alarmStats: StateFlow<AlarmStats> = allAlarms
         .combine(upcomingAlarms) { all, upcoming ->
             AlarmStats(
@@ -80,7 +80,6 @@ class AlarmViewModel(
         refreshSystemPermissions()
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun createAlarm(
         hour: Int,
         minute: Int,
@@ -192,7 +191,6 @@ class AlarmViewModel(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun duplicateAlarm(alarmId: Long) {
         viewModelScope.launch {
             try {

@@ -2,7 +2,7 @@ package com.omondit.alarmfocus.domain.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
-import java.util.Calendar
+import java.util.*
 
 @Parcelize
 data class AlarmTime(
@@ -32,15 +32,11 @@ data class AlarmTime(
 
     fun toFormattedString(is24Hour: Boolean = true): String {
         return if (is24Hour) {
-            "%02d:%02d".format(hour, minute)
+            String.format("%02d:%02d", hour, minute)
         } else {
-            val displayHour = when {
-                hour == 0 -> 12
-                hour > 12 -> hour - 12
-                else -> hour
-            }
+            val displayHour = if (hour == 0) 12 else if (hour > 12) hour - 12 else hour
             val amPm = if (hour < 12) "AM" else "PM"
-            "%d:%02d %s".format(displayHour, minute, amPm)
+            String.format("%d:%02d %s", displayHour, minute, amPm)
         }
     }
 
@@ -60,6 +56,8 @@ data class AlarmTime(
             set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
+
+            // If time has passed today, schedule for tomorrow
             if (timeInMillis <= System.currentTimeMillis()) {
                 add(Calendar.DAY_OF_MONTH, 1)
             }
@@ -67,5 +65,7 @@ data class AlarmTime(
         return calendar.timeInMillis
     }
 
-    fun isValid(): Boolean = hour in 0..23 && minute in 0..59
+    fun isValid(): Boolean {
+        return hour in 0..23 && minute in 0..59
+    }
 }

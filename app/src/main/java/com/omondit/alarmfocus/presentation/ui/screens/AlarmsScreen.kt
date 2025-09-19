@@ -77,7 +77,6 @@ import com.omondit.alarmfocus.presentation.viewmodel.AlarmStats
 import com.omondit.alarmfocus.presentation.viewmodel.AlarmViewModel
 import com.omondit.alarmfocus.presentation.viewmodel.UiEvent
 
-@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmsScreen(
@@ -182,7 +181,10 @@ fun AlarmsScreen(
                             )
                         }
 
-                        items(disabledAlarms, key = { it.id }) { alarm ->
+                        items(
+                            items = disabledAlarms,
+                            key = { it.id }
+                        ) { alarm ->
                             AlarmCard(
                                 alarm = alarm,
                                 upcomingInfo = null,
@@ -312,7 +314,7 @@ private fun AlarmListHeader(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.TrendingUp,
+                        Icons.Default.TrendingUp,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(16.dp)
@@ -647,7 +649,7 @@ private fun getTimeUntilText(timeUntil: Long?): String {
     }
 }
 
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickCreateAlarmDialog(
     onDismiss: () -> Unit,

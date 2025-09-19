@@ -14,7 +14,6 @@ class CreateAlarmUseCase(
     private val validator: AlarmValidator
 ) {
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     suspend operator fun invoke(
         time: AlarmTime,
         label: String,
