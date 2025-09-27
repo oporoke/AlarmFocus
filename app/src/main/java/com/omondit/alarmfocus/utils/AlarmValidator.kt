@@ -1,11 +1,13 @@
 package com.omondit.alarmfocus.utils
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 import java.io.File
 
 /**
@@ -19,6 +21,16 @@ class AlarmValidator(private val context: Context) {
         private const val MAX_SOUND_DURATION_MS = 300_000 // 5 minutes
         private const val MIN_SOUND_DURATION_MS = 1_000 // 1 second
         private const val MAX_FILE_SIZE_MB = 10
+
+        @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+        private val REQUIRED_PERMISSIONS = arrayOf(
+            android.Manifest.permission.WAKE_LOCK,
+            android.Manifest.permission.VIBRATE,
+            android.Manifest.permission.MODIFY_AUDIO_SETTINGS,
+            android.Manifest.permission.RECEIVE_BOOT_COMPLETED,
+            android.Manifest.permission.FOREGROUND_SERVICE,
+            android.Manifest.permission.POST_NOTIFICATIONS
+        )
     }
 
     data class ValidationResult(
@@ -112,8 +124,8 @@ class AlarmValidator(private val context: Context) {
 
     /**
      * Validate system state for reliable alarm triggering
+     * Fixed: Removed PermissionManager dependency to avoid lifecycle issues
      */
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     fun validateSystemState(): ValidationResult {
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
@@ -134,10 +146,22 @@ class AlarmValidator(private val context: Context) {
             )
         }
 
-        // Check if alarm permissions are properly set
-        val permissionManager = PermissionManager(context as androidx.activity.ComponentActivity)
-        if (!permissionManager.areAllPermissionsGranted()) {
-            errors.add("Required permissions are missing. Alarms may not work properly.")
+        // Check permissions directly without PermissionManager to avoid lifecycle issues
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val missingPermissions = checkRequiredPermissions()
+            if (missingPermissions.isNotEmpty()) {
+                warnings.add("Some permissions may be missing. Check app settings for optimal performance.")
+            }
+        }
+
+        // Check Do Not Disturb permission
+        if (!hasDndPermission()) {
+            warnings.add("Do Not Disturb override permission not granted. Alarms may not sound in silent mode.")
+        }
+
+        // Check exact alarm permission (Android 12+)
+        if (!hasExactAlarmPermission()) {
+            warnings.add("Exact alarm permission not granted. Alarms may be delayed.")
         }
 
         return ValidationResult(
@@ -145,6 +169,42 @@ class AlarmValidator(private val context: Context) {
             errors = errors,
             warnings = warnings
         )
+    }
+
+    /**
+     * Check required permissions directly using Context
+     */
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private fun checkRequiredPermissions(): List<String> {
+        return REQUIRED_PERMISSIONS.filter { permission ->
+            ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    /**
+     * Check Do Not Disturb permission
+     */
+    private fun hasDndPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            notificationManager.isNotificationPolicyAccessGranted
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Check exact alarm permission
+     */
+    private fun hasExactAlarmPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE)
+                as android.app.AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
     }
 
     /**
