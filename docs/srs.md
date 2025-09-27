@@ -13,7 +13,6 @@
 4. [System Architecture](#4-system-architecture)
 5. [Constraints and Testing](#5-constraints-and-testing)
 
----
 
 ## 1. Introduction
 
