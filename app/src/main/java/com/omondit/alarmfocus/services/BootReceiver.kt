@@ -3,6 +3,10 @@ package com.omondit.alarmfocus.services
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
+import com.omondit.alarmfocus.data.database.AppDatabase
+import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.utils.AlarmScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,8 +32,34 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private suspend fun restoreAlarms(context: Context) {
-        // This will be implemented in Deliverable 3 & 5
-        // For now, just a placeholder that logs the event
-        android.util.Log.i("BootReceiver", "Device booted - alarms will be restored")
+        try {
+            val database = AppDatabase.getDatabase(context)
+            val repository = AlarmRepositoryImpl(database.alarmDao())
+            val scheduler = AlarmScheduler(context)
+
+            // Get all enabled alarms
+            val enabledAlarms = repository.getEnabledAlarmsOnce()
+
+            Log.i("BootReceiver", "Restoring ${enabledAlarms.size} alarms after boot")
+
+            // Reschedule each alarm
+            enabledAlarms.forEach { alarm ->
+                val result = scheduler.scheduleAlarm(alarm)
+                when (result) {
+                    is AlarmScheduler.ScheduleResult.Success -> {
+                        repository.updateNextScheduledTime(alarm.id, result.nextTriggerTime)
+                        Log.d("BootReceiver", "Restored alarm ${alarm.id}")
+                    }
+                    is AlarmScheduler.ScheduleResult.Error -> {
+                        Log.e("BootReceiver", "Failed to restore alarm ${alarm.id}: ${result.message}")
+                    }
+                    else -> {}
+                }
+            }
+
+            Log.i("BootReceiver", "Alarm restoration complete")
+        } catch (e: Exception) {
+            Log.e("BootReceiver", "Error restoring alarms", e)
+        }
     }
 }

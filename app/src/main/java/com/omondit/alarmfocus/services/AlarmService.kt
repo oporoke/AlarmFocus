@@ -19,6 +19,7 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 import com.omondit.alarmfocus.data.database.AppDatabase
 import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.utils.MissionManager
 import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,14 +30,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Ultra-Loud Alarm Service
- * Handles maximum volume alarm playback with DND override and persistence
+ * Ultra-Loud Alarm Service with Mission Integration
+ * Handles maximum volume alarm playback and mission coordination
  */
 class AlarmService : Service() {
 
     companion object {
         const val ACTION_START_ALARM = "START_ALARM"
         const val ACTION_STOP_ALARM = "STOP_ALARM"
+        const val ACTION_MISSION_COMPLETED = "MISSION_COMPLETED"
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_SOUND_URI = "sound_uri"
         const val NOTIFICATION_ID = 1001
@@ -46,6 +48,7 @@ class AlarmService : Service() {
         private const val VOLUME_RAMP_STEPS = 20
         private const val MAX_VOLUME_PERCENTAGE = 1.0f
         private const val INITIAL_VOLUME_PERCENTAGE = 0.7f
+        private const val MISSION_START_DELAY = 3_000L // 3 seconds after alarm starts
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -53,22 +56,25 @@ class AlarmService : Service() {
     private var audioManager: AudioManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var volumeRampJob: Job? = null
+    private var missionStartJob: Job? = null
 
-//    private var serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private lateinit var alarmRepository: AlarmRepositoryImpl
+    private lateinit var missionManager: MissionManager
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var originalAlarmVolume: Int = 0
     private var originalRingerMode: Int = 0
     private var currentAlarmId: Long = -1
+    private var isMissionActive: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize repository
+
+        // Initialize repository and mission manager
         val database = AppDatabase.getDatabase(this)
         alarmRepository = AlarmRepositoryImpl(database.alarmDao())
+        missionManager = MissionManager(this, alarmRepository)
 
-        // Existing code...
         createNotificationChannel()
         initializeSystemServices()
     }
@@ -79,26 +85,28 @@ class AlarmService : Service() {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
 
-                // INTEGRATION: Mark alarm as triggered in database
                 if (alarmId != -1L) {
                     serviceScope.launch {
                         alarmRepository.markAlarmTriggered(alarmId)
                     }
+                    startAlarm(alarmId, soundUri)
                 }
-
-                startAlarm(alarmId, soundUri)
             }
             ACTION_STOP_ALARM -> {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-
-                // INTEGRATION: Mark alarm as dismissed in database
                 if (alarmId != -1L) {
                     serviceScope.launch {
                         alarmRepository.markAlarmDismissed(alarmId)
                     }
                 }
-
                 stopAlarm()
+            }
+            ACTION_MISSION_COMPLETED -> {
+                val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+                if (alarmId != -1L && alarmId == currentAlarmId) {
+                    // Mission completed successfully, stop alarm
+                    stopAlarm()
+                }
             }
         }
         return START_STICKY
@@ -127,6 +135,7 @@ class AlarmService : Service() {
 
     private fun startAlarm(alarmId: Long, soundUri: String?) {
         currentAlarmId = alarmId
+        isMissionActive = false
 
         // Acquire wake lock to keep device awake
         wakeLock?.acquire(30 * 60 * 1000L) // 30 minutes max
@@ -148,6 +157,30 @@ class AlarmService : Service() {
 
         // Start volume ramping
         startVolumeRamping()
+
+        // Schedule mission start after a few seconds of alarm
+        scheduleMissionStart(alarmId)
+    }
+
+    private fun scheduleMissionStart(alarmId: Long) {
+        missionStartJob = serviceScope.launch {
+            delay(MISSION_START_DELAY)
+
+            if (currentAlarmId == alarmId && !isMissionActive) {
+                val missionStarted = missionManager.startMission(alarmId)
+                if (missionStarted) {
+                    isMissionActive = true
+
+                    // Update notification to show mission is active
+                    val notification = createMissionActiveNotification(alarmId)
+                    val notificationManager = getSystemService(NotificationManager::class.java)
+                    notificationManager?.notify(NOTIFICATION_ID, notification)
+                } else {
+                    // Mission failed to start, continue with regular alarm
+                    // User can dismiss manually or wait for timeout
+                }
+            }
+        }
     }
 
     private fun saveOriginalAudioSettings() {
@@ -161,7 +194,6 @@ class AlarmService : Service() {
         audioManager?.let { am ->
             // Override Do Not Disturb mode
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // Request DND access if needed - this should be handled in setup
                 try {
                     am.ringerMode = AudioManager.RINGER_MODE_NORMAL
                 } catch (e: SecurityException) {
@@ -193,14 +225,11 @@ class AlarmService : Service() {
                 if (soundUri != null && soundUri.isNotEmpty()) {
                     setDataSource(this@AlarmService, android.net.Uri.parse(soundUri))
                 } else {
-                    // Use default ultra-annoying alarm sound
-                    val descriptor = assets.openFd("default_alarm_ultra_loud.mp3")
+                    // Use default system alarm sound
                     setDataSource(
-                        descriptor.fileDescriptor,
-                        descriptor.startOffset,
-                        descriptor.length
+                        this@AlarmService,
+                        android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
                     )
-                    descriptor.close()
                 }
 
                 // Configure playback
@@ -258,7 +287,7 @@ class AlarmService : Service() {
                 setOnPreparedListener { it.start() }
             }
         } catch (e: Exception) {
-            // Critical error - log and attempt notification sound
+            // Critical error - service will continue but without sound
         }
     }
 
@@ -311,8 +340,12 @@ class AlarmService : Service() {
     }
 
     private fun stopAlarm() {
-        // Cancel volume ramping
+        currentAlarmId = -1L
+        isMissionActive = false
+
+        // Cancel jobs
         volumeRampJob?.cancel()
+        missionStartJob?.cancel()
 
         // Stop media player
         try {
@@ -388,6 +421,7 @@ class AlarmService : Service() {
     private fun createAlarmNotification(alarmId: Long): Notification {
         val stopIntent = Intent(this, AlarmService::class.java).apply {
             action = ACTION_STOP_ALARM
+            putExtra(EXTRA_ALARM_ID, alarmId)
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -398,7 +432,7 @@ class AlarmService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ADHD Focus Alarm Active")
-            .setContentText("Alarm $alarmId is ringing - Complete your mission to dismiss")
+            .setContentText("Alarm is ringing - Wake-up challenge will appear shortly")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -407,6 +441,34 @@ class AlarmService : Service() {
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Stop Alarm",
+                stopPendingIntent
+            )
+            .build()
+    }
+
+    private fun createMissionActiveNotification(alarmId: Long): Notification {
+        val stopIntent = Intent(this, AlarmService::class.java).apply {
+            action = ACTION_STOP_ALARM
+            putExtra(EXTRA_ALARM_ID, alarmId)
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            0,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Wake-Up Challenge Active")
+            .setContentText("Complete your mission to stop the alarm")
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Emergency Stop",
                 stopPendingIntent
             )
             .build()

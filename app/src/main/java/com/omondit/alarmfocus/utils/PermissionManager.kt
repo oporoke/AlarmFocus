@@ -27,7 +27,8 @@ class PermissionManager(private val activity: ComponentActivity) {
             Manifest.permission.MODIFY_AUDIO_SETTINGS,
             Manifest.permission.RECEIVE_BOOT_COMPLETED,
             Manifest.permission.FOREGROUND_SERVICE,
-            Manifest.permission.POST_NOTIFICATIONS
+            Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.CAMERA
         )
     }
 

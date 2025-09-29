@@ -1,155 +1,162 @@
+// Fix for SettingsScreen.kt to properly integrate DiagnosticsScreen
+
 package com.omondit.alarmfocus.presentation.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.omondit.alarmfocus.data.database.AppDatabase
+import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
 
 @Composable
-fun SettingsScreen() {
-    var darkMode by remember { mutableStateOf(false) }
-    var highContrast by remember { mutableStateOf(false) }
-    var largeText by remember { mutableStateOf(false) }
-    var hapticFeedback by remember { mutableStateOf(true) }
+fun SettingsScreen(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var showDiagnostics by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier
-                .semantics { contentDescription = "Settings screen" }
-                .padding(bottom = 24.dp)
+    if (showDiagnostics) {
+        // Initialize repository for diagnostics
+        val database = AppDatabase.getDatabase(context)
+        val repository = AlarmRepositoryImpl(database.alarmDao())
+
+        DiagnosticsScreen(
+            alarmRepository = repository,
+            modifier = modifier
         )
-
-        // Accessibility Section
-        SettingsSection(title = "Accessibility") {
-            SettingsSwitchItem(
-                title = "Dark Mode",
-                description = "Easier on the eyes in low light",
-                checked = darkMode,
-                onCheckedChange = { darkMode = it }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
             )
 
-            SettingsSwitchItem(
-                title = "High Contrast",
-                description = "Improved visibility and focus",
-                checked = highContrast,
-                onCheckedChange = { highContrast = it }
-            )
+            Spacer(modifier = Modifier.height(24.dp))
 
-            SettingsSwitchItem(
-                title = "Large Text",
-                description = "Bigger text throughout the app",
-                checked = largeText,
-                onCheckedChange = { largeText = it }
-            )
+            // Settings options
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.Healing,
+                        title = "System Diagnostics",
+                        description = "Check alarm system health and troubleshoot issues",
+                        onClick = { showDiagnostics = true }
+                    )
+                }
 
-            SettingsSwitchItem(
-                title = "Haptic Feedback",
-                description = "Vibration feedback for interactions",
-                checked = hapticFeedback,
-                onCheckedChange = { hapticFeedback = it }
-            )
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.QrCode,
+                        title = "Manage Barcodes",
+                        description = "Add and manage barcodes for wake-up challenges",
+                        onClick = { /* Navigate to barcode management */ }
+                    )
+                }
+
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.PhotoLibrary,
+                        title = "Manage Photos",
+                        description = "Add and manage reference photos",
+                        onClick = { /* Navigate to photo management */ }
+                    )
+                }
+
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FormatQuote,
+                        title = "Manage Quotes",
+                        description = "Add custom motivational quotes",
+                        onClick = { /* Navigate to quote management */ }
+                    )
+                }
+
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.VolumeUp,
+                        title = "Sound Settings",
+                        description = "Manage custom alarm sounds",
+                        onClick = { /* Navigate to sound management */ }
+                    )
+                }
+
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.Info,
+                        title = "About",
+                        description = "App version and information",
+                        onClick = { /* Show about dialog */ }
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun SettingsSection(
+private fun SettingsItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
-    content: @Composable ColumnScope.() -> Unit
+    description: String,
+    onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-            content()
-        }
-    }
-}
-
-@Composable
-fun SettingsSwitchItem(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 12.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription =
-                    "$title. $description. ${if (checked) "Enabled" else "Disabled"}"
-            },
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            )
-        }
-
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier
-                .padding(start = 16.dp)
-                .clearAndSetSemantics { } // Handled by parent Row
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }

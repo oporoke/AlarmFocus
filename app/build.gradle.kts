@@ -94,4 +94,16 @@ dependencies {
 
     //handle permissions Compose UI:
     implementation(libs.accompanist.permissions)
+
+    // Camera and barcode scanning
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2.v150)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view.v150)
+
+    // ML Kit Vision for barcode scanning
+    implementation(libs.barcode.scanning)
+
+    // Additional camera extensions if needed
+    implementation(libs.androidx.camera.extensions)
 }
