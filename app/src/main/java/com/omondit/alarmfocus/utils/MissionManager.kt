@@ -37,38 +37,43 @@ class MissionManager(
                 return false
             }
 
-            val missionConfig = MissionConfig.fromJson(alarm.missionConfig)
+            var missionConfig = MissionConfig.fromJson(alarm.missionConfig)
 
-            // If no mission configured, allow immediate dismissal
             if (missionConfig.type == Mission.MissionType.NONE) {
-                Log.d(TAG, "No mission configured for alarm $alarmId")
-                return completeMission(alarmId, MissionResult(true, 0, 0, 1.0f))
+                Log.d(TAG, "No mission configured, using default EASY math mission")
+                missionConfig = MissionConfig(
+                    type = Mission.MissionType.MATH,
+                    difficulty = Mission.Difficulty.EASY,
+                    parameters = mapOf(
+                        "max_attempts" to "3",
+                        "timeout_seconds" to "60"
+                    )
+                )
             }
 
             val mission = MissionFactory.createMission(missionConfig, context)
             activeMissionSession = MissionSession(alarmId, mission)
 
-            // Save active mission state
             prefs.edit().putLong(KEY_ACTIVE_MISSION, alarmId).apply()
 
-            // Launch mission activity
             val missionIntent = Intent(context, MissionActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_NO_USER_ACTION or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
                 putExtra("alarm_id", alarmId)
                 putExtra("mission_config", missionConfig.toJson())
             }
 
             context.startActivity(missionIntent)
-
-            Log.d(TAG, "Mission started for alarm $alarmId, type: ${missionConfig.type}")
+            Log.d(TAG, "Mission started: $alarmId, type: ${missionConfig.type}")
             true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start mission for alarm $alarmId", e)
+            Log.e(TAG, "Failed to start mission: $alarmId", e)
             false
         }
     }
-
     /**
      * Complete a mission with the given result
      */

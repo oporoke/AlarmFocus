@@ -5,15 +5,33 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.omondit.alarmfocus.data.database.dao.AlarmDao
+import com.omondit.alarmfocus.data.database.dao.AppUsageDao
+import com.omondit.alarmfocus.data.database.dao.BlockedAppDao
+import com.omondit.alarmfocus.data.database.dao.FocusSessionDao
+import com.omondit.alarmfocus.data.database.dao.SleepSessionDao
 import com.omondit.alarmfocus.data.database.entities.AlarmEntity
+import com.omondit.alarmfocus.data.database.entities.AppUsageEntity
+import com.omondit.alarmfocus.data.database.entities.BlockedAppEntity
+import com.omondit.alarmfocus.data.database.entities.FocusSessionEntity
+import com.omondit.alarmfocus.data.database.entities.SleepSessionEntity
 
 @Database(
-    entities = [AlarmEntity::class],
-    version = 1,
+    entities = [
+        AlarmEntity::class,
+        AppUsageEntity::class,
+        BlockedAppEntity::class,
+        FocusSessionEntity::class,
+        SleepSessionEntity::class
+    ],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alarmDao(): AlarmDao
+    abstract fun appUsageDao(): AppUsageDao
+    abstract fun blockedAppDao(): BlockedAppDao
+    abstract fun focusSessionDao(): FocusSessionDao
+    abstract fun sleepSessionDao(): SleepSessionDao
 
     companion object {
         @Volatile

@@ -57,6 +57,31 @@ class BootReceiver : BroadcastReceiver() {
                 }
             }
 
+            // ✅ CHECK IF ALARM WAS RINGING BEFORE REBOOT
+            val prefs = context.getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+            val activeAlarmId = prefs.getLong("active_alarm_id", -1L)
+
+            if (activeAlarmId != -1L) {
+                Log.i("BootReceiver", "Active alarm detected: $activeAlarmId - Restarting")
+
+                val soundUri = prefs.getString("active_alarm_sound", null)
+
+                // Restart the alarm service
+                val serviceIntent = Intent(context, AlarmService::class.java).apply {
+                    action = AlarmService.ACTION_START_ALARM
+                    putExtra(AlarmService.EXTRA_ALARM_ID, activeAlarmId)
+                    putExtra(AlarmService.EXTRA_SOUND_URI, soundUri)
+                }
+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+
+                Log.i("BootReceiver", "Restarted active alarm $activeAlarmId")
+            }
+
             Log.i("BootReceiver", "Alarm restoration complete")
         } catch (e: Exception) {
             Log.e("BootReceiver", "Error restoring alarms", e)

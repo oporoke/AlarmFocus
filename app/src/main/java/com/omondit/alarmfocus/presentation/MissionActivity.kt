@@ -1,7 +1,12 @@
 package com.omondit.alarmfocus.presentation
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,13 +19,10 @@ import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
 import com.omondit.alarmfocus.domain.model.MissionConfig
 import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 import com.omondit.alarmfocus.presentation.ui.screens.IntegratedMissionScreen
+import com.omondit.alarmfocus.services.AlarmService
 import com.omondit.alarmfocus.utils.MissionManager
 import kotlinx.coroutines.launch
 
-/**
- * Full-screen activity that hosts mission challenges
- * Designed to be impossible to dismiss accidentally
- */
 class MissionActivity : ComponentActivity() {
 
     private lateinit var missionManager: MissionManager
@@ -28,7 +30,6 @@ class MissionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Make this activity show over lock screen and keep screen on
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -42,19 +43,19 @@ class MissionActivity : ComponentActivity() {
             )
         }
 
-        // Initialize dependencies
         val database = AppDatabase.getDatabase(this)
         val repository = AlarmRepositoryImpl(database.alarmDao())
         missionManager = MissionManager(this, repository)
 
         val alarmId = intent.getLongExtra("alarm_id", -1L)
         val missionConfigJson = intent.getStringExtra("mission_config") ?: "{}"
-        val missionConfig = MissionConfig.fromJson(missionConfigJson)
 
         if (alarmId == -1L) {
             finish()
             return
         }
+
+        val missionConfig = MissionConfig.fromJson(missionConfigJson)
 
         setContent {
             AlarmFocusTheme {
@@ -68,6 +69,11 @@ class MissionActivity : ComponentActivity() {
                         onMissionCompleted = { result ->
                             lifecycleScope.launch {
                                 missionManager.completeMission(alarmId, result)
+                                val completeIntent = Intent(this@MissionActivity, AlarmService::class.java).apply {
+                                    action = AlarmService.ACTION_MISSION_COMPLETED
+                                    putExtra(AlarmService.EXTRA_ALARM_ID, alarmId)
+                                }
+                                startService(completeIntent)
                                 finish()
                             }
                         },
@@ -85,17 +91,28 @@ class MissionActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // Prevent back button from dismissing mission
-        // Users must complete the mission or use emergency dismiss
+        super.onBackPressed()
+        Toast.makeText(this, "Complete the challenge to dismiss alarm", Toast.LENGTH_SHORT).show()
     }
 
     override fun onPause() {
         super.onPause()
-        // Bring activity back to front if user tries to leave
-        if (!isFinishing) {
-            val intent = intent
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        val missionActive = prefs.getBoolean("mission_active", false)
+
+        if (missionActive && !isFinishing) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!isFinishing) {
+                    val intent = Intent(this, MissionActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        putExtra("alarm_id", intent.getLongExtra("alarm_id", -1L))
+                        putExtra("mission_config", intent.getStringExtra("mission_config"))
+                    }
+                    startActivity(intent)
+                }
+            }, 100)
         }
     }
 }

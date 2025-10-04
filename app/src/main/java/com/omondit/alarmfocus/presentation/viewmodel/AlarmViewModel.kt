@@ -108,6 +108,8 @@ class AlarmViewModel(
                         sendEvent(UiEvent.AlarmCreated(alarmId))
                     },
                     onFailure = { error ->
+                        // Show clear error message
+                        sendEvent(UiEvent.ShowSnackbar(error.message ?: "Cannot toggle alarm"))
                         updateState {
                             it.copy(
                                 isLoading = false,

@@ -16,11 +16,12 @@ import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.omondit.alarmfocus.data.database.AppDatabase
 import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.presentation.MissionActivity
 import com.omondit.alarmfocus.utils.MissionManager
-import kotlin.math.min
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,11 +29,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlin.math.min
 
-/**
- * Ultra-Loud Alarm Service with Mission Integration
- * Handles maximum volume alarm playback and mission coordination
- */
 class AlarmService : Service() {
 
     companion object {
@@ -43,12 +42,13 @@ class AlarmService : Service() {
         const val EXTRA_SOUND_URI = "sound_uri"
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "ADHD_ALARM_CHANNEL"
+        private const val TAG = "AlarmService"
 
-        private const val VOLUME_RAMP_DURATION = 10_000L // 10 seconds
+        private const val VOLUME_RAMP_DURATION = 10_000L
         private const val VOLUME_RAMP_STEPS = 20
         private const val MAX_VOLUME_PERCENTAGE = 1.0f
         private const val INITIAL_VOLUME_PERCENTAGE = 0.7f
-        private const val MISSION_START_DELAY = 3_000L // 3 seconds after alarm starts
+        private const val MISSION_START_DELAY = 3_000L
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -69,23 +69,36 @@ class AlarmService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-
-        // Initialize repository and mission manager
         val database = AppDatabase.getDatabase(this)
         alarmRepository = AlarmRepositoryImpl(database.alarmDao())
         missionManager = MissionManager(this, alarmRepository)
-
         createNotificationChannel()
         initializeSystemServices()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "Service started: action=${intent?.action}")
+
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        val savedAlarmId = prefs.getLong("active_alarm_id", -1L)
+        val savedMissionActive = prefs.getBoolean("mission_active", false)
+
+        if (savedAlarmId != -1L && intent?.action == ACTION_START_ALARM) {
+            val requestedAlarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+            if (savedAlarmId == requestedAlarmId) {
+                currentAlarmId = savedAlarmId
+                isMissionActive = savedMissionActive
+                Log.d(TAG, "Restored state: alarmId=$currentAlarmId, missionActive=$isMissionActive")
+            }
+        }
+
         when (intent?.action) {
             ACTION_START_ALARM -> {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
 
                 if (alarmId != -1L) {
+                    startForeground(NOTIFICATION_ID, createAlarmNotification(alarmId))
                     serviceScope.launch {
                         alarmRepository.markAlarmTriggered(alarmId)
                     }
@@ -95,6 +108,13 @@ class AlarmService : Service() {
             ACTION_STOP_ALARM -> {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
                 if (alarmId != -1L) {
+                    if (isMissionActive && alarmId == currentAlarmId) {
+                        Log.w(TAG, "Cannot stop - mission active")
+                        val notification = createMissionActiveNotification(alarmId)
+                        val notificationManager = getSystemService(NotificationManager::class.java)
+                        notificationManager?.notify(NOTIFICATION_ID, notification)
+                        return START_STICKY
+                    }
                     serviceScope.launch {
                         alarmRepository.markAlarmDismissed(alarmId)
                     }
@@ -103,8 +123,18 @@ class AlarmService : Service() {
             }
             ACTION_MISSION_COMPLETED -> {
                 val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-                if (alarmId != -1L && alarmId == currentAlarmId) {
-                    // Mission completed successfully, stop alarm
+                if (alarmId != -1L && alarmId == currentAlarmId && isMissionActive) {
+                    Log.i(TAG, "Mission completed: $alarmId")
+                    isMissionActive = false
+                    prefs.edit().putBoolean("mission_active", false).apply()
+                    serviceScope.launch {
+                        alarmRepository.markAlarmDismissed(alarmId)
+
+                        // Enable post-alarm app blocking
+                        val appBlockManager = com.omondit.alarmfocus.utils.AppBlockManager(this@AlarmService)
+                        appBlockManager.enablePostAlarmBlocking()
+                        Log.d(TAG, "Post-alarm blocking enabled")
+                    }
                     stopAlarm()
                 }
             }
@@ -116,16 +146,12 @@ class AlarmService : Service() {
 
     private fun initializeSystemServices() {
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
         vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager =
-                getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibratorManager.defaultVibrator
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
         } else {
             @Suppress("DEPRECATION")
             getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
-
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
@@ -134,80 +160,66 @@ class AlarmService : Service() {
     }
 
     private fun startAlarm(alarmId: Long, soundUri: String?) {
+        wakeLock?.acquire(30 * 60 * 1000L)
         currentAlarmId = alarmId
         isMissionActive = false
 
-        // Acquire wake lock to keep device awake
-        wakeLock?.acquire(30 * 60 * 1000L) // 30 minutes max
+        val alarm = runBlocking { alarmRepository.getAlarmById(alarmId) }
+        val missionConfigJson = alarm?.missionConfig ?: "{}"
 
-        // Save original audio settings
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putLong("active_alarm_id", alarmId)
+            .putString("active_alarm_sound", soundUri)
+            .putString("mission_config", missionConfigJson)
+            .putLong("alarm_start_time", System.currentTimeMillis())
+            .apply()
+
         saveOriginalAudioSettings()
-
-        // Override audio settings for maximum impact
         overrideAudioSettings()
-
-        // Start foreground service with notification
-        startForeground(NOTIFICATION_ID, createAlarmNotification(alarmId))
-
-        // Initialize and start media player
         initializeMediaPlayer(soundUri)
-
-        // Start vibration
         startVibration()
-
-        // Start volume ramping
         startVolumeRamping()
-
-        // Schedule mission start after a few seconds of alarm
         scheduleMissionStart(alarmId)
     }
 
     private fun scheduleMissionStart(alarmId: Long) {
         missionStartJob = serviceScope.launch {
             delay(MISSION_START_DELAY)
-
             if (currentAlarmId == alarmId && !isMissionActive) {
                 val missionStarted = missionManager.startMission(alarmId)
                 if (missionStarted) {
                     isMissionActive = true
+                    val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("mission_active", true).apply()
 
-                    // Update notification to show mission is active
                     val notification = createMissionActiveNotification(alarmId)
                     val notificationManager = getSystemService(NotificationManager::class.java)
                     notificationManager?.notify(NOTIFICATION_ID, notification)
-                } else {
-                    // Mission failed to start, continue with regular alarm
-                    // User can dismiss manually or wait for timeout
+                    Log.d(TAG, "Mission active: $alarmId")
                 }
             }
         }
     }
 
     private fun saveOriginalAudioSettings() {
-        audioManager?.let { am ->
-            originalAlarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
-            originalRingerMode = am.ringerMode
+        audioManager?.let {
+            originalAlarmVolume = it.getStreamVolume(AudioManager.STREAM_ALARM)
+            originalRingerMode = it.ringerMode
         }
     }
 
     private fun overrideAudioSettings() {
         audioManager?.let { am ->
-            // Override Do Not Disturb mode
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 try {
                     am.ringerMode = AudioManager.RINGER_MODE_NORMAL
                 } catch (e: SecurityException) {
-                    // Graceful degradation if permission not granted
+                    Log.w(TAG, "Cannot override DND")
                 }
             }
-
-            // Set alarm stream to maximum volume
             val maxVolume = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
-            am.setStreamVolume(
-                AudioManager.STREAM_ALARM,
-                maxVolume,
-                AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
-            )
+            am.setStreamVolume(AudioManager.STREAM_ALARM, maxVolume, 0)
         }
     }
 
@@ -221,49 +233,25 @@ class AlarmService : Service() {
                         .build()
                 )
 
-                // Set data source (default or custom sound)
-                if (soundUri != null && soundUri.isNotEmpty()) {
+                if (!soundUri.isNullOrEmpty()) {
                     setDataSource(this@AlarmService, android.net.Uri.parse(soundUri))
                 } else {
-                    // Use default system alarm sound
-                    setDataSource(
-                        this@AlarmService,
-                        android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
-                    )
+                    val afd = this@AlarmService.assets.openFd("default_alarm_ultra_loud.mp3")
+                    setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                    afd.close()
                 }
 
-                // Configure playback
                 isLooping = true
                 setVolume(INITIAL_VOLUME_PERCENTAGE, INITIAL_VOLUME_PERCENTAGE)
-
-                setOnPreparedListener { player ->
-                    player.start()
+                setOnPreparedListener { it.start() }
+                setOnErrorListener { _, _, _ ->
+                    initializeFallbackAlarm()
+                    true
                 }
-
-                setOnErrorListener { _, what, extra ->
-                    // Fallback to system alarm sound
-                    try {
-                        reset()
-                        setDataSource(
-                            this@AlarmService,
-                            android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
-                        )
-                        prepareAsync()
-                    } catch (e: Exception) {
-                        // Last resort: use notification sound
-                        setDataSource(
-                            this@AlarmService,
-                            android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
-                        )
-                        prepareAsync()
-                    }
-                    true // Error handled
-                }
-
                 prepareAsync()
             }
         } catch (e: Exception) {
-            // Fallback to system alarm
+            Log.e(TAG, "MediaPlayer init failed", e)
             initializeFallbackAlarm()
         }
     }
@@ -277,17 +265,16 @@ class AlarmService : Service() {
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
-                setDataSource(
-                    this@AlarmService,
-                    android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
-                )
+                val afd = this@AlarmService.assets.openFd("default_alarm_ultra_loud.mp3")
+                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                afd.close()
                 isLooping = true
                 setVolume(INITIAL_VOLUME_PERCENTAGE, INITIAL_VOLUME_PERCENTAGE)
                 prepareAsync()
                 setOnPreparedListener { it.start() }
             }
         } catch (e: Exception) {
-            // Critical error - service will continue but without sound
+            Log.e(TAG, "Fallback alarm failed", e)
         }
     }
 
@@ -295,45 +282,31 @@ class AlarmService : Service() {
         try {
             vibrator?.let { vib ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    // Create aggressive vibration pattern for ADHD users
                     val pattern = longArrayOf(0, 500, 200, 500, 200, 1000, 200, 500)
                     val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255, 0, 255)
-
-                    val vibrationEffect = VibrationEffect.createWaveform(
-                        pattern,
-                        amplitudes,
-                        0 // Repeat from beginning
-                    )
-                    vib.vibrate(vibrationEffect)
+                    vib.vibrate(VibrationEffect.createWaveform(pattern, amplitudes, 0))
                 } else {
                     @Suppress("DEPRECATION")
-                    val pattern = longArrayOf(0, 500, 200, 500, 200, 1000, 200, 500)
-                    vib.vibrate(pattern, 0)
+                    vib.vibrate(longArrayOf(0, 500, 200, 500, 200, 1000, 200, 500), 0)
                 }
             }
         } catch (e: Exception) {
-            // Vibration not critical - continue without it
+            Log.w(TAG, "Vibration failed", e)
         }
     }
 
     private fun startVolumeRamping() {
         volumeRampJob = serviceScope.launch {
             val stepDelay = VOLUME_RAMP_DURATION / VOLUME_RAMP_STEPS
-            val volumeIncrement = (MAX_VOLUME_PERCENTAGE - INITIAL_VOLUME_PERCENTAGE) /
-                VOLUME_RAMP_STEPS
+            val volumeIncrement = (MAX_VOLUME_PERCENTAGE - INITIAL_VOLUME_PERCENTAGE) / VOLUME_RAMP_STEPS
 
             for (step in 1..VOLUME_RAMP_STEPS) {
                 delay(stepDelay)
-
-                val newVolume = min(
-                    INITIAL_VOLUME_PERCENTAGE + (volumeIncrement * step),
-                    MAX_VOLUME_PERCENTAGE
-                )
-
+                val newVolume = min(INITIAL_VOLUME_PERCENTAGE + (volumeIncrement * step), MAX_VOLUME_PERCENTAGE)
                 try {
                     mediaPlayer?.setVolume(newVolume, newVolume)
                 } catch (e: Exception) {
-                    // Continue ramping even if one step fails
+                    Log.w(TAG, "Volume ramp failed", e)
                 }
             }
         }
@@ -342,62 +315,48 @@ class AlarmService : Service() {
     private fun stopAlarm() {
         currentAlarmId = -1L
         isMissionActive = false
-
-        // Cancel jobs
         volumeRampJob?.cancel()
         missionStartJob?.cancel()
 
-        // Stop media player
         try {
-            mediaPlayer?.let { player ->
-                if (player.isPlaying) {
-                    player.stop()
-                }
-                player.release()
+            mediaPlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
             }
+            mediaPlayer = null
         } catch (e: Exception) {
-            // Ensure cleanup continues
+            Log.w(TAG, "MediaPlayer cleanup failed", e)
         }
-        mediaPlayer = null
 
-        // Stop vibration
         try {
             vibrator?.cancel()
         } catch (e: Exception) {
-            // Continue cleanup
+            Log.w(TAG, "Vibrator cleanup failed", e)
         }
 
-        // Restore original audio settings
         restoreOriginalAudioSettings()
 
-        // Release wake lock
         try {
-            wakeLock?.let { lock ->
-                if (lock.isHeld) {
-                    lock.release()
-                }
-            }
+            wakeLock?.let { if (it.isHeld) it.release() }
         } catch (e: Exception) {
-            // Continue cleanup
+            Log.w(TAG, "WakeLock cleanup failed", e)
         }
 
-        // Stop foreground service
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
+
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     private fun restoreOriginalAudioSettings() {
         try {
-            audioManager?.let { am ->
-                am.setStreamVolume(
-                    AudioManager.STREAM_ALARM,
-                    originalAlarmVolume,
-                    AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
-                )
-                am.ringerMode = originalRingerMode
+            audioManager?.let {
+                it.setStreamVolume(AudioManager.STREAM_ALARM, originalAlarmVolume, 0)
+                it.ringerMode = originalRingerMode
             }
         } catch (e: Exception) {
-            // Best effort restoration
+            Log.w(TAG, "Audio restore failed", e)
         }
     }
 
@@ -412,65 +371,65 @@ class AlarmService : Service() {
                 setBypassDnd(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
-
-            val notificationManager = getSystemService(NotificationManager::class.java)
-            notificationManager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
         }
     }
 
     private fun createAlarmNotification(alarmId: Long): Notification {
-        val stopIntent = Intent(this, AlarmService::class.java).apply {
-            action = ACTION_STOP_ALARM
-            putExtra(EXTRA_ALARM_ID, alarmId)
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        val missionConfig = prefs.getString("mission_config", "{}")
+
+        val missionIntent = Intent(this, MissionActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("alarm_id", alarmId)
+            putExtra("mission_config", missionConfig)
         }
-        val stopPendingIntent = PendingIntent.getService(
+
+        val contentPendingIntent = PendingIntent.getActivity(
             this,
-            0,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            alarmId.toInt(),
+            missionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ADHD Focus Alarm Active")
-            .setContentText("Alarm is ringing - Wake-up challenge will appear shortly")
+            .setContentText("Tap to complete wake-up challenge")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(false)
             .setOngoing(true)
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Stop Alarm",
-                stopPendingIntent
-            )
+            .setContentIntent(contentPendingIntent)
             .build()
     }
 
     private fun createMissionActiveNotification(alarmId: Long): Notification {
-        val stopIntent = Intent(this, AlarmService::class.java).apply {
-            action = ACTION_STOP_ALARM
-            putExtra(EXTRA_ALARM_ID, alarmId)
+        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
+        val missionConfig = prefs.getString("mission_config", "{}")
+
+        val missionIntent = Intent(this, MissionActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("alarm_id", alarmId)
+            putExtra("mission_config", missionConfig)
         }
-        val stopPendingIntent = PendingIntent.getService(
+
+        val contentPendingIntent = PendingIntent.getActivity(
             this,
-            0,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            alarmId.toInt(),
+            missionIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Wake-Up Challenge Active")
-            .setContentText("Complete your mission to stop the alarm")
+            .setContentText("Tap to complete the challenge")
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(false)
             .setOngoing(true)
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Emergency Stop",
-                stopPendingIntent
-            )
+            .setContentIntent(contentPendingIntent)
             .build()
     }
 

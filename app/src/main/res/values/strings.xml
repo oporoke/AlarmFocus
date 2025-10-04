@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">AlarmFocus</string>
+    <string name="accessibility_service_description">This service monitors app launches to block distracting apps during focus mode and post-alarm periods. It helps you stay focused and ensures you wake up properly.</string>
 </resources>

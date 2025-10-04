@@ -28,6 +28,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+        Log.d(TAG, "===== ALARM RECEIVED: ID=$alarmId =====")
         val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
         val label = intent.getStringExtra(EXTRA_ALARM_LABEL) ?: "Alarm"
         val vibrationEnabled = intent.getBooleanExtra(EXTRA_VIBRATION_ENABLED, true)
@@ -40,6 +41,8 @@ class AlarmReceiver : BroadcastReceiver() {
             return
         }
 
+        // Extend timeout for heavy work
+        val pendingResult = goAsync()
         try {
             val serviceIntent = Intent(context, AlarmService::class.java).apply {
                 action = AlarmService.ACTION_START_ALARM
@@ -64,6 +67,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
             // TODO: Implement fallback notification or system alarm
             // This is critical for ADHD users who depend on the alarm
+        }finally {
+            pendingResult.finish()
         }
     }
 }

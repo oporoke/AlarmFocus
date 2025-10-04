@@ -13,6 +13,10 @@ class ToggleAlarmUseCase(
             val alarm = repository.getAlarmById(alarmId)
                 ?: return Result.failure(Exception("Alarm not found"))
 
+            // Block disabling if alarm is currently active/ringing
+            if (alarm.isActive) {
+                return Result.failure(Exception("Cannot disable active alarm. Complete the mission first."))
+            }
             val newEnabledState = !alarm.isEnabled
 
             // Update database
