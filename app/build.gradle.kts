@@ -3,9 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     id("kotlin-parcelize")
+
     id("com.google.devtools.ksp") version "2.0.21-1.0.25"
-    id("com.google.gms.google-services") version "4.4.0" apply false
-    id("com.google.firebase.crashlytics") version "2.9.9" apply false
 }
 
 android {
@@ -106,16 +105,14 @@ dependencies {
     // ML Kit Vision for barcode scanning
     implementation(libs.barcode.scanning)
 
+    // ML Kit Image Labeling for photo comparison
+    implementation("com.google.mlkit:image-labeling:17.0.9")
+
     // Additional camera extensions if needed
     implementation(libs.androidx.camera.extensions)
 
     // AndroidX Security for encryption
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Firebase Crashlytics
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-crashlytics-ktx")
-    implementation("com.google.firebase:firebase-analytics-ktx")
 
     // Testing libraries
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
