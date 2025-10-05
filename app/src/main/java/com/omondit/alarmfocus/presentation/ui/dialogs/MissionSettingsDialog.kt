@@ -334,21 +334,21 @@ private fun getMissionTypeOptions(): List<MissionTypeOption> {
             title = "Photo Match",
             description = "Take a photo matching a reference image",
             icon = Icons.Default.PhotoCamera,
-            comingSoon = true
+            comingSoon = false
         ),
         MissionTypeOption(
             type = Mission.MissionType.ACTIVITY,
             title = "Physical Activity",
             description = "Complete jumping jacks or squats",
             icon = Icons.Default.DirectionsRun,
-            comingSoon = true
+            comingSoon = false
         ),
         MissionTypeOption(
             type = Mission.MissionType.TYPING,
             title = "Motivational Typing",
             description = "Type a motivational quote with high accuracy",
             icon = Icons.Default.Keyboard,
-            comingSoon = true
+            comingSoon = false
         )
     )
 }
@@ -365,7 +365,22 @@ private fun getDifficultyExplanation(type: Mission.MissionType, difficulty: Miss
             Mission.Difficulty.MEDIUM -> "45 seconds to scan barcode"
             Mission.Difficulty.HARD -> "30 seconds to scan barcode, more precision required"
         }
-        else -> "Difficulty settings will be available when this mission type is implemented."
+        Mission.MissionType.PHOTO -> when (difficulty) {
+            Mission.Difficulty.EASY -> "70% similarity match required, 60 seconds timeout"
+            Mission.Difficulty.MEDIUM -> "80% similarity match required, 45 seconds timeout"
+            Mission.Difficulty.HARD -> "90% similarity match required, 30 seconds timeout"
+        }
+        Mission.MissionType.ACTIVITY -> when (difficulty) {
+            Mission.Difficulty.EASY -> "Complete 10 jumping jacks or squats"
+            Mission.Difficulty.MEDIUM -> "Complete 20 jumping jacks or squats"
+            Mission.Difficulty.HARD -> "Complete 30 jumping jacks or squats"
+        }
+        Mission.MissionType.TYPING -> when (difficulty) {
+            Mission.Difficulty.EASY -> "Type a short quote with 85% accuracy"
+            Mission.Difficulty.MEDIUM -> "Type a medium quote with 90% accuracy"
+            Mission.Difficulty.HARD -> "Type a long quote with 95% accuracy"
+        }
+        Mission.MissionType.NONE -> "No mission challenge will be required to dismiss the alarm"
     }
 }
 

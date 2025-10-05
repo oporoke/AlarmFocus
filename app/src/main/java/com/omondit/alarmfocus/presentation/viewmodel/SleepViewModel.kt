@@ -42,7 +42,7 @@ class SleepViewModel(
             }
             val startDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
 
-            sleepSessionDao.getSessionsInDateRange(startDate, endDate).collect { sessions ->
+            sleepSessionDao.getSessionsByDateRange(startDate, endDate).collect { sessions ->
                 _recentSessions.value = sessions
 
                 // Calculate average quality

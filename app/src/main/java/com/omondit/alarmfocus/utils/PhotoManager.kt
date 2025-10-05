@@ -7,7 +7,7 @@ import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.label.ImageLabeling
 import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
-import kotlinx.coroutines.tasks.await
+import com.google.android.gms.tasks.Tasks
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.coroutines.resume

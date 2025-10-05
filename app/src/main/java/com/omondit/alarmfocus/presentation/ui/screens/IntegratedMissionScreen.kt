@@ -347,7 +347,7 @@ fun BarcodeMissionScreen(
         }
 
         currentChallenge != null -> {
-            BaarcodeScannerScreen(
+            BarcodeScannerScreen(
                 challenge = currentChallenge!!,
                 onBarcodeScanned = { scannedCode ->
                     scope.launch {

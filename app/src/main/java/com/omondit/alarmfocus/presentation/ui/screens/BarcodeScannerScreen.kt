@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 
 @Composable
-fun BaarcodeScannerScreen(
+fun BarcodeScannerScreen(
     challenge: Challenge,
     onBarcodeScanned: (String) -> Unit,
     onTimeout: () -> Unit,

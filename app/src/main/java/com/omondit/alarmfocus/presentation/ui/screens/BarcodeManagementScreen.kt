@@ -607,7 +607,7 @@ private fun BarcodeScannerForRegistration(
         timeoutSeconds = 60
     )
 
-    BaarcodeScannerScreen(
+    BarcodeScannerScreen(
         challenge = dummyChallenge,
         onBarcodeScanned = { scannedCode ->
             // For now, default to CODE_128 - in a real implementation,

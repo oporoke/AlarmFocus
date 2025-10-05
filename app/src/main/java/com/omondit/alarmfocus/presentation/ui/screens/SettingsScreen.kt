@@ -23,8 +23,34 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showSoundPicker by remember { mutableStateOf(false) }
+    var showBarcodeManagement by remember { mutableStateOf(false) }
+    var showPhotoManagement by remember { mutableStateOf(false) }
+    var showDeviceAdminOnboarding by remember { mutableStateOf(false) }
 
-    if (showDiagnostics) {
+    // Sound picker dialog
+    if (showSoundPicker) {
+        com.omondit.alarmfocus.presentation.ui.dialogs.SoundPickerDialog(
+            currentSoundUri = null,
+            onSoundSelected = { uri ->
+                // Handle sound selection
+                showSoundPicker = false
+            },
+            onDismiss = { showSoundPicker = false }
+        )
+    }
+
+    // Device admin onboarding
+    if (showDeviceAdminOnboarding) {
+        val deviceAdminManager = remember { com.omondit.alarmfocus.utils.DeviceAdminManager(context) }
+        DeviceAdminOnboardingScreen(
+            onEnableDeviceAdmin = {
+                deviceAdminManager.requestDeviceAdminActivation()
+                showDeviceAdminOnboarding = false
+            },
+            onSkip = { showDeviceAdminOnboarding = false }
+        )
+    } else if (showDiagnostics) {
         // Initialize repository for diagnostics
         val database = AppDatabase.getDatabase(context)
         val repository = AlarmRepositoryImpl(database.alarmDao())
@@ -33,6 +59,34 @@ fun SettingsScreen(
             alarmRepository = repository,
             modifier = modifier
         )
+    } else if (showBarcodeManagement) {
+        com.omondit.alarmfocus.presentation.ui.screens.BarcodeManagementScreen(
+            onNavigateBack = { showBarcodeManagement = false }
+        )
+    } else if (showPhotoManagement) {
+        // For photo management, we'll show a photo gallery/management screen
+        // PhotoCaptureScreen is meant for mission challenges, create a simpler management screen
+        Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { showPhotoManagement = false }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+                Text(
+                    text = "Photo Management",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Photo management screen - Use mission setup to register reference photos",
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
     } else {
         Column(
             modifier = modifier
@@ -65,7 +119,7 @@ fun SettingsScreen(
                         icon = Icons.Default.QrCode,
                         title = "Manage Barcodes",
                         description = "Add and manage barcodes for wake-up challenges",
-                        onClick = { /* Navigate to barcode management */ }
+                        onClick = { showBarcodeManagement = true }
                     )
                 }
 
@@ -74,7 +128,7 @@ fun SettingsScreen(
                         icon = Icons.Default.PhotoLibrary,
                         title = "Manage Photos",
                         description = "Add and manage reference photos",
-                        onClick = { /* Navigate to photo management */ }
+                        onClick = { showPhotoManagement = true }
                     )
                 }
 
@@ -92,7 +146,16 @@ fun SettingsScreen(
                         icon = Icons.Default.VolumeUp,
                         title = "Sound Settings",
                         description = "Manage custom alarm sounds",
-                        onClick = { /* Navigate to sound management */ }
+                        onClick = { showSoundPicker = true }
+                    )
+                }
+
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.Security,
+                        title = "Alarm Protection",
+                        description = "Enable device admin for anti-uninstall protection",
+                        onClick = { showDeviceAdminOnboarding = true }
                     )
                 }
 
