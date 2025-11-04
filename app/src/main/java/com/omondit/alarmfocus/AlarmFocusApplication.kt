@@ -2,6 +2,7 @@ package com.omondit.alarmfocus
 
 import android.app.Application
 import android.util.Log
+import com.omondit.alarmfocus.di.AppModule
 
 
 /**
@@ -9,8 +10,12 @@ import android.util.Log
  */
 class AlarmFocusApplication : Application() {
 
+    lateinit var appModule: AppModule
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        appModule = AppModule(this)
         Log.d(TAG, "AlarmFocus application started")
     }
 

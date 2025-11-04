@@ -222,4 +222,68 @@ class EncryptionManager(private val context: Context) {
             false
         }
     }
+
+    /**
+     * Save encrypted alarm service state
+     */
+    fun saveAlarmServiceState(
+        alarmId: Long,
+        soundUri: String?,
+        missionConfig: String,
+        missionActive: Boolean
+    ) {
+        encryptedPrefs.edit().apply {
+            putLong("active_alarm_id", alarmId)
+            putString("active_alarm_sound", soundUri)
+            putString("mission_config", missionConfig)
+            putBoolean("mission_active", missionActive)
+            putLong("alarm_start_time", System.currentTimeMillis())
+            apply()
+        }
+    }
+
+    /**
+     * Get encrypted alarm service state
+     */
+    fun getAlarmServiceState(): AlarmServiceState {
+        return AlarmServiceState(
+            activeAlarmId = encryptedPrefs.getLong("active_alarm_id", -1L),
+            activeAlarmSound = encryptedPrefs.getString("active_alarm_sound", null),
+            missionConfig = encryptedPrefs.getString("mission_config", "{}"),
+            missionActive = encryptedPrefs.getBoolean("mission_active", false),
+            alarmStartTime = encryptedPrefs.getLong("alarm_start_time", 0L)
+        )
+    }
+
+    /**
+     * Update mission active status
+     */
+    fun updateMissionActiveStatus(missionActive: Boolean) {
+        encryptedPrefs.edit().putBoolean("mission_active", missionActive).apply()
+    }
+
+    /**
+     * Clear alarm service state
+     */
+    fun clearAlarmServiceState() {
+        encryptedPrefs.edit().apply {
+            remove("active_alarm_id")
+            remove("active_alarm_sound")
+            remove("mission_config")
+            remove("mission_active")
+            remove("alarm_start_time")
+            apply()
+        }
+    }
+
+    /**
+     * Data class for alarm service state
+     */
+    data class AlarmServiceState(
+        val activeAlarmId: Long,
+        val activeAlarmSound: String?,
+        val missionConfig: String?,
+        val missionActive: Boolean,
+        val alarmStartTime: Long
+    )
 }

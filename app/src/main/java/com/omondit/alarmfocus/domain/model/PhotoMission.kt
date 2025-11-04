@@ -32,7 +32,7 @@ class PhotoMission(
         private const val MAX_ATTEMPTS = 5
     }
 
-    override fun generateChallenge(): Challenge {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
         if (registeredPhotos.isEmpty()) {
             return Challenge(
                 id = "photo_no_refs",
@@ -45,6 +45,11 @@ class PhotoMission(
 
         val targetPhoto = registeredPhotos.random()
 
+        // Escalate by increasing tolerance requirement and reducing time
+        val baseTolerance = getToleranceForDifficulty(difficulty)
+        val escalatedTolerance = (baseTolerance + (escalationLevel * 0.05f)).coerceAtMost(0.95f)
+        val timeReduction = escalationLevel * 5
+
         return Challenge(
             id = generateChallengeId(),
             question = "Take a photo matching: ${targetPhoto.displayName}",
@@ -54,13 +59,14 @@ class PhotoMission(
                 "displayName" to targetPhoto.displayName,
                 "location" to targetPhoto.location,
                 "description" to targetPhoto.description,
-                "tolerance" to getToleranceForDifficulty(difficulty).toString()
+                "tolerance" to escalatedTolerance.toString(),
+                "escalation_level" to escalationLevel
             ),
-            timeoutSeconds = when (difficulty) {
+            timeoutSeconds = (when (difficulty) {
                 Difficulty.EASY -> 90
                 Difficulty.MEDIUM -> 60
                 Difficulty.HARD -> 45
-            },
+            } - timeReduction).coerceAtLeast(20),
             allowedAttempts = MAX_ATTEMPTS
         )
     }
@@ -118,14 +124,84 @@ class PhotoMission(
     }
 
     private fun comparePhotos(bitmap1: Bitmap, bitmap2: Bitmap): Float {
-        // Simple histogram comparison - in production, use more sophisticated algorithms
-        val hist1 = calculateHistogram(bitmap1)
-        val hist2 = calculateHistogram(bitmap2)
+        // Multi-factor comparison for better accuracy
+        val colorSimilarity = compareColorHistograms(bitmap1, bitmap2)
+        val structureSimilarity = compareStructure(bitmap1, bitmap2)
+        val rgbSimilarity = compareRGBHistograms(bitmap1, bitmap2)
 
+        // Weighted average of different comparison methods
+        return (colorSimilarity * 0.3f) + (structureSimilarity * 0.4f) + (rgbSimilarity * 0.3f)
+    }
+
+    private fun compareColorHistograms(bitmap1: Bitmap, bitmap2: Bitmap): Float {
+        val hist1 = calculateGrayscaleHistogram(bitmap1)
+        val hist2 = calculateGrayscaleHistogram(bitmap2)
         return calculateHistogramSimilarity(hist1, hist2)
     }
 
-    private fun calculateHistogram(bitmap: Bitmap): IntArray {
+    private fun compareRGBHistograms(bitmap1: Bitmap, bitmap2: Bitmap): Float {
+        val (r1, g1, b1) = calculateRGBHistograms(bitmap1)
+        val (r2, g2, b2) = calculateRGBHistograms(bitmap2)
+
+        val rSim = calculateHistogramSimilarity(r1, r2)
+        val gSim = calculateHistogramSimilarity(g1, g2)
+        val bSim = calculateHistogramSimilarity(b1, b2)
+
+        return (rSim + gSim + bSim) / 3f
+    }
+
+    private fun compareStructure(bitmap1: Bitmap, bitmap2: Bitmap): Float {
+        // Divide image into grid and compare each section
+        val gridSize = 4
+        var totalSimilarity = 0f
+        var sectionCount = 0
+
+        val width1 = bitmap1.width
+        val height1 = bitmap1.height
+        val width2 = bitmap2.width
+        val height2 = bitmap2.height
+
+        val sectionWidth1 = width1 / gridSize
+        val sectionHeight1 = height1 / gridSize
+        val sectionWidth2 = width2 / gridSize
+        val sectionHeight2 = height2 / gridSize
+
+        for (row in 0 until gridSize) {
+            for (col in 0 until gridSize) {
+                val x1 = col * sectionWidth1
+                val y1 = row * sectionHeight1
+                val x2 = col * sectionWidth2
+                val y2 = row * sectionHeight2
+
+                val section1 = Bitmap.createBitmap(
+                    bitmap1,
+                    x1,
+                    y1,
+                    minOf(sectionWidth1, width1 - x1),
+                    minOf(sectionHeight1, height1 - y1)
+                )
+                val section2 = Bitmap.createBitmap(
+                    bitmap2,
+                    x2,
+                    y2,
+                    minOf(sectionWidth2, width2 - x2),
+                    minOf(sectionHeight2, height2 - y2)
+                )
+
+                val hist1 = calculateGrayscaleHistogram(section1)
+                val hist2 = calculateGrayscaleHistogram(section2)
+                totalSimilarity += calculateHistogramSimilarity(hist1, hist2)
+                sectionCount++
+
+                section1.recycle()
+                section2.recycle()
+            }
+        }
+
+        return if (sectionCount > 0) totalSimilarity / sectionCount else 0f
+    }
+
+    private fun calculateGrayscaleHistogram(bitmap: Bitmap): IntArray {
         val histogram = IntArray(256)
         val width = bitmap.width
         val height = bitmap.height
@@ -139,6 +215,28 @@ class PhotoMission(
         }
 
         return histogram
+    }
+
+    private fun calculateRGBHistograms(bitmap: Bitmap): Triple<IntArray, IntArray, IntArray> {
+        val histR = IntArray(256)
+        val histG = IntArray(256)
+        val histB = IntArray(256)
+        val width = bitmap.width
+        val height = bitmap.height
+
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                val pixel = bitmap.getPixel(x, y)
+                val r = (pixel shr 16 and 0xFF)
+                val g = (pixel shr 8 and 0xFF)
+                val b = (pixel and 0xFF)
+                histR[r]++
+                histG[g]++
+                histB[b]++
+            }
+        }
+
+        return Triple(histR, histG, histB)
     }
 
     private fun calculateHistogramSimilarity(hist1: IntArray, hist2: IntArray): Float {

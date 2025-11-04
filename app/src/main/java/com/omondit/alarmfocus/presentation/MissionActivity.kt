@@ -14,8 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.omondit.alarmfocus.data.database.AppDatabase
-import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.AlarmFocusApplication
 import com.omondit.alarmfocus.domain.model.MissionConfig
 import com.omondit.alarmfocus.presentation.theme.AlarmFocusTheme
 import com.omondit.alarmfocus.presentation.ui.screens.IntegratedMissionScreen
@@ -43,9 +42,8 @@ class MissionActivity : ComponentActivity() {
             )
         }
 
-        val database = AppDatabase.getDatabase(this)
-        val repository = AlarmRepositoryImpl(database.alarmDao())
-        missionManager = MissionManager(this, repository)
+        val appModule = (application as AlarmFocusApplication).appModule
+        missionManager = appModule.missionManager
 
         val alarmId = intent.getLongExtra("alarm_id", -1L)
         val missionConfigJson = intent.getStringExtra("mission_config") ?: "{}"
@@ -97,10 +95,10 @@ class MissionActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        val missionActive = prefs.getBoolean("mission_active", false)
+        val appModule = (application as AlarmFocusApplication).appModule
+        val savedState = appModule.encryptionManager.getAlarmServiceState()
 
-        if (missionActive && !isFinishing) {
+        if (savedState.missionActive && !isFinishing) {
             Handler(Looper.getMainLooper()).postDelayed({
                 if (!isFinishing) {
                     val intent = Intent(this, MissionActivity::class.java).apply {

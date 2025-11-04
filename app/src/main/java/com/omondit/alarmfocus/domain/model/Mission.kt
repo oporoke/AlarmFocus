@@ -13,7 +13,7 @@ abstract class Mission {
     abstract val difficulty: Difficulty
     abstract val config: MissionConfig
 
-    abstract fun generateChallenge(): Challenge
+    abstract fun generateChallenge(escalationLevel: Int = 0): Challenge
     abstract fun validateAnswer(challenge: Challenge, answer: String): ValidationResult
 
     enum class MissionType {
@@ -123,8 +123,16 @@ class MathMission(
         private const val HARD_OPERATIONS = "+-*/"
     }
 
-    override fun generateChallenge(): Challenge {
-        val (num1, num2, operation) = when (difficulty) {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
+        // Escalate difficulty based on wrong answers
+        val effectiveDifficulty = when {
+            escalationLevel >= 3 -> Difficulty.HARD
+            escalationLevel >= 2 -> Difficulty.MEDIUM
+            escalationLevel >= 1 && difficulty == Difficulty.EASY -> Difficulty.MEDIUM
+            else -> difficulty
+        }
+
+        val (num1, num2, operation) = when (effectiveDifficulty) {
             Difficulty.EASY -> generateEasyProblem()
             Difficulty.MEDIUM -> generateMediumProblem()
             Difficulty.HARD -> generateHardProblem()
@@ -140,9 +148,11 @@ class MathMission(
             data = mapOf(
                 "num1" to num1,
                 "num2" to num2,
-                "operation" to operation
+                "operation" to operation,
+                "effective_difficulty" to effectiveDifficulty.name,
+                "escalation_level" to escalationLevel
             ),
-            timeoutSeconds = when (difficulty) {
+            timeoutSeconds = when (effectiveDifficulty) {
                 Difficulty.EASY -> 60
                 Difficulty.MEDIUM -> 90
                 Difficulty.HARD -> 120
@@ -307,7 +317,7 @@ class NoMission : Mission() {
     override val difficulty = Difficulty.EASY
     override val config = MissionConfig()
 
-    override fun generateChallenge(): Challenge {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
         return Challenge(
             id = "no_mission",
             question = "",
@@ -339,7 +349,7 @@ class MissionSession(
 ) {
 
     fun generateNewChallenge(): Challenge {
-        val challenge = mission.generateChallenge()
+        val challenge = mission.generateChallenge(escalationLevel)
         currentChallenge = challenge
         attempts = 0
         return challenge
@@ -356,7 +366,7 @@ class MissionSession(
 
         if (result.shouldEscalate) {
             escalationLevel++
-            // TODO: Implement escalation logic (increase difficulty)
+            // Escalation level is now used in generateNewChallenge
         }
 
         return result.copy(

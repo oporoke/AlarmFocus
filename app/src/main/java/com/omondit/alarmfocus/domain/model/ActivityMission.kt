@@ -30,25 +30,30 @@ class ActivityMission(
         private const val FORCE_THRESHOLD_2G = 2.0f * 9.81f // 2g in m/s²
     }
 
-    override fun generateChallenge(): Challenge {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
         val activityType = getActivityTypeForDifficulty(difficulty)
-        val requiredCount = getRequiredCountForDifficulty(difficulty)
+        val baseCount = getRequiredCountForDifficulty(difficulty)
+
+        // Escalate by increasing required count
+        val escalatedCount = baseCount + (escalationLevel * 2)
+        val timeReduction = escalationLevel * 3
 
         return Challenge(
             id = generateChallengeId(),
-            question = "Complete $requiredCount ${activityType.displayName}",
-            correctAnswer = requiredCount.toString(),
+            question = "Complete $escalatedCount ${activityType.displayName}",
+            correctAnswer = escalatedCount.toString(),
             data = mapOf(
                 "activityType" to activityType.name,
-                "requiredCount" to requiredCount.toString(),
+                "requiredCount" to escalatedCount.toString(),
                 "forceThreshold" to FORCE_THRESHOLD_2G.toString(),
-                "timeWindow" to COMPLETION_WINDOW_SECONDS.toString()
+                "timeWindow" to COMPLETION_WINDOW_SECONDS.toString(),
+                "escalation_level" to escalationLevel
             ),
-            timeoutSeconds = when (difficulty) {
+            timeoutSeconds = (when (difficulty) {
                 Difficulty.EASY -> 60   // More time for easy
                 Difficulty.MEDIUM -> 45
                 Difficulty.HARD -> 30   // Less time for hard
-            },
+            } - timeReduction).coerceAtLeast(20),
             allowedAttempts = 3
         )
     }

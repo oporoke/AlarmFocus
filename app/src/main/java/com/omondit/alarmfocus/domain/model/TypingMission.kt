@@ -24,8 +24,16 @@ class TypingMission(
         private const val MAX_ATTEMPTS = 5
     }
 
-    override fun generateChallenge(): Challenge {
-        val selectedQuote = quoteManager?.getRandomQuote(difficulty) ?: getDefaultQuote()
+    override fun generateChallenge(escalationLevel: Int): Challenge {
+        // Escalate by using more difficult quotes and reducing time
+        val effectiveDifficulty = when {
+            escalationLevel >= 2 -> Difficulty.HARD
+            escalationLevel >= 1 && difficulty == Difficulty.EASY -> Difficulty.MEDIUM
+            else -> difficulty
+        }
+
+        val selectedQuote = quoteManager?.getRandomQuote(effectiveDifficulty) ?: getDefaultQuote()
+        val timeReduction = escalationLevel * 5
 
         return Challenge(
             id = generateChallengeId(),
@@ -36,9 +44,11 @@ class TypingMission(
                 "author" to selectedQuote.author,
                 "category" to selectedQuote.category,
                 "requiredAccuracy" to REQUIRED_ACCURACY.toString(),
-                "wordCount" to selectedQuote.text.split(" ").size.toString()
+                "wordCount" to selectedQuote.text.split(" ").size.toString(),
+                "escalation_level" to escalationLevel,
+                "effective_difficulty" to effectiveDifficulty.name
             ),
-            timeoutSeconds = calculateTimeLimit(selectedQuote.text, difficulty),
+            timeoutSeconds = (calculateTimeLimit(selectedQuote.text, effectiveDifficulty) - timeReduction).coerceAtLeast(20),
             allowedAttempts = MAX_ATTEMPTS
         )
     }
