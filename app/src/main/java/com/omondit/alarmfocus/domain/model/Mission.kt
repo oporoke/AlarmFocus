@@ -6,14 +6,49 @@ import kotlinx.parcelize.Parcelize
 import org.json.JSONObject
 
 /**
- * Base mission interface for wake-up challenges
+ * Base class for wake-up challenge missions.
+ *
+ * Missions force the user to complete a specific task (math, barcode scan, photo match, etc.)
+ * before they can dismiss an alarm. This is designed for heavy sleepers and ADHD users.
+ *
+ * ## Mission Lifecycle
+ * 1. Mission is created from [MissionConfig] via [MissionFactory]
+ * 2. [generateChallenge] creates a new challenge with difficulty based on escalation level
+ * 3. User attempts to solve the challenge
+ * 4. [validateAnswer] checks if the answer is correct
+ * 5. If wrong, escalation level increases and a harder challenge is generated
+ * 6. Process repeats until success or max attempts reached
+ *
+ * ## Escalation
+ * The [escalationLevel] parameter increases difficulty when users provide wrong answers:
+ * - Level 0: Base difficulty
+ * - Level 1+: Progressively harder (reduced time, more complex challenges)
+ * - Level 3+: Maximum difficulty
+ *
+ * @see MissionFactory
+ * @see MissionSession
+ * @see Challenge
  */
 abstract class Mission {
     abstract val type: MissionType
     abstract val difficulty: Difficulty
     abstract val config: MissionConfig
 
-    abstract fun generateChallenge(): Challenge
+    /**
+     * Generates a new challenge for this mission.
+     *
+     * @param escalationLevel How many wrong answers have been submitted (0 = first attempt)
+     * @return A [Challenge] with question, correct answer, timeout, and metadata
+     */
+    abstract fun generateChallenge(escalationLevel: Int = 0): Challenge
+
+    /**
+     * Validates the user's answer against the challenge.
+     *
+     * @param challenge The challenge that was presented
+     * @param answer The user's submitted answer
+     * @return A [ValidationResult] indicating correctness and whether to escalate difficulty
+     */
     abstract fun validateAnswer(challenge: Challenge, answer: String): ValidationResult
 
     enum class MissionType {
@@ -28,7 +63,26 @@ abstract class Mission {
 }
 
 /**
- * Mission configuration that can be serialized to JSON
+ * Mission configuration that can be serialized to JSON and passed via Intent.
+ *
+ * This class is used to configure which mission type, difficulty, and additional
+ * parameters should be used for an alarm. It's stored in the database as JSON
+ * and passed between Activities as a Parcelable.
+ *
+ * ## Example Usage
+ * ```kotlin
+ * val config = MissionConfig(
+ *     type = Mission.MissionType.MATH,
+ *     difficulty = Mission.Difficulty.MEDIUM,
+ *     parameters = mapOf("timeout_seconds" to "90")
+ * )
+ * val json = config.toJson() // Store in database
+ * val restored = MissionConfig.fromJson(json) // Restore from database
+ * ```
+ *
+ * @property type The type of mission to use (MATH, BARCODE, PHOTO, etc.)
+ * @property difficulty The difficulty level (EASY, MEDIUM, HARD)
+ * @property parameters Optional custom parameters for the mission
  */
 @Parcelize
 data class MissionConfig(
@@ -123,8 +177,16 @@ class MathMission(
         private const val HARD_OPERATIONS = "+-*/"
     }
 
-    override fun generateChallenge(): Challenge {
-        val (num1, num2, operation) = when (difficulty) {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
+        // Escalate difficulty based on wrong answers
+        val effectiveDifficulty = when {
+            escalationLevel >= 3 -> Difficulty.HARD
+            escalationLevel >= 2 -> Difficulty.MEDIUM
+            escalationLevel >= 1 && difficulty == Difficulty.EASY -> Difficulty.MEDIUM
+            else -> difficulty
+        }
+
+        val (num1, num2, operation) = when (effectiveDifficulty) {
             Difficulty.EASY -> generateEasyProblem()
             Difficulty.MEDIUM -> generateMediumProblem()
             Difficulty.HARD -> generateHardProblem()
@@ -140,9 +202,11 @@ class MathMission(
             data = mapOf(
                 "num1" to num1,
                 "num2" to num2,
-                "operation" to operation
+                "operation" to operation,
+                "effective_difficulty" to effectiveDifficulty.name,
+                "escalation_level" to escalationLevel
             ),
-            timeoutSeconds = when (difficulty) {
+            timeoutSeconds = when (effectiveDifficulty) {
                 Difficulty.EASY -> 60
                 Difficulty.MEDIUM -> 90
                 Difficulty.HARD -> 120
@@ -307,7 +371,7 @@ class NoMission : Mission() {
     override val difficulty = Difficulty.EASY
     override val config = MissionConfig()
 
-    override fun generateChallenge(): Challenge {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
         return Challenge(
             id = "no_mission",
             question = "",
@@ -327,7 +391,33 @@ class NoMission : Mission() {
 }
 
 /**
- * Mission state management for active challenges
+ * Manages the state of an active mission session.
+ *
+ * A mission session tracks the current challenge, number of attempts, escalation level,
+ * and elapsed time for a single alarm dismissal attempt. This class coordinates between
+ * the UI (which displays challenges) and the mission logic (which generates and validates them).
+ *
+ * ## Session Flow
+ * 1. Create session: `MissionSession(alarmId, mission)`
+ * 2. Generate challenge: `val challenge = session.generateNewChallenge()`
+ * 3. User submits answer: `val result = session.submitAnswer(userAnswer)`
+ * 4. If wrong and attempts remaining: repeat from step 2 (with higher escalation)
+ * 5. If correct or max attempts: get result with `session.getCompletionResult(success)`
+ *
+ * ## Escalation
+ * The session automatically increments [escalationLevel] when the user provides wrong answers.
+ * This causes [generateNewChallenge] to create progressively harder challenges.
+ *
+ * @property alarmId The ID of the alarm being dismissed
+ * @property mission The mission implementation (MathMission, BarcodeMission, etc.)
+ * @property currentChallenge The active challenge, or null if none generated yet
+ * @property attempts Number of answer submissions for the current challenge
+ * @property startTime When this session started (milliseconds since epoch)
+ * @property escalationLevel How many wrong answers have been submitted (increases difficulty)
+ *
+ * @see Mission
+ * @see Challenge
+ * @see ValidationResult
  */
 class MissionSession(
     val alarmId: Long,
@@ -339,7 +429,7 @@ class MissionSession(
 ) {
 
     fun generateNewChallenge(): Challenge {
-        val challenge = mission.generateChallenge()
+        val challenge = mission.generateChallenge(escalationLevel)
         currentChallenge = challenge
         attempts = 0
         return challenge
@@ -356,7 +446,7 @@ class MissionSession(
 
         if (result.shouldEscalate) {
             escalationLevel++
-            // TODO: Implement escalation logic (increase difficulty)
+            // Escalation level is now used in generateNewChallenge
         }
 
         return result.copy(

@@ -23,7 +23,7 @@ class BarcodeMission(
         private const val MAX_SCAN_ATTEMPTS = 5
     }
 
-    override fun generateChallenge(): Challenge {
+    override fun generateChallenge(escalationLevel: Int): Challenge {
         if (registeredBarcodes.isEmpty()) {
             return Challenge(
                 id = "barcode_no_codes",
@@ -33,6 +33,9 @@ class BarcodeMission(
                 allowedAttempts = 0
             )
         }
+
+        // Escalate difficulty by reducing time
+        val timeReduction = escalationLevel * 5 // Reduce time by 5 seconds per escalation
 
         // Select a random registered barcode for the challenge
         val targetBarcode = registeredBarcodes.random()
@@ -45,13 +48,14 @@ class BarcodeMission(
                 "barcodeId" to targetBarcode.id,
                 "displayName" to targetBarcode.displayName,
                 "location" to targetBarcode.location,
-                "type" to targetBarcode.type.name
+                "type" to targetBarcode.type.name,
+                "escalation_level" to escalationLevel
             ),
-            timeoutSeconds = when (difficulty) {
+            timeoutSeconds = (when (difficulty) {
                 Difficulty.EASY -> 60  // More time for easy mode
                 Difficulty.MEDIUM -> 45
                 Difficulty.HARD -> 30  // Less time for hard mode
-            },
+            } - timeReduction).coerceAtLeast(15),
             allowedAttempts = MAX_SCAN_ATTEMPTS
         )
     }

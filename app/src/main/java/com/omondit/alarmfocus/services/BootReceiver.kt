@@ -14,6 +14,12 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Security: Only accept system broadcast intents
+        if (!isValidSystemBroadcast(intent)) {
+            Log.w("BootReceiver", "Rejecting invalid broadcast intent: ${intent.action}")
+            return
+        }
+
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
@@ -29,6 +35,24 @@ class BootReceiver : BroadcastReceiver() {
                 }
             }
         }
+    }
+
+    /**
+     * Validates that the broadcast is a legitimate system broadcast
+     * Prevents malicious apps from triggering alarm restoration
+     */
+    private fun isValidSystemBroadcast(intent: Intent): Boolean {
+        val action = intent.action ?: return false
+
+        // Only accept known system broadcast actions
+        val validActions = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_PACKAGE_REPLACED,
+            "android.intent.action.LOCKED_BOOT_COMPLETED" // API 24+
+        )
+
+        return action in validActions
     }
 
     private suspend fun restoreAlarms(context: Context) {

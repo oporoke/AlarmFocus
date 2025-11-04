@@ -59,6 +59,15 @@ class AppModule(private val context: Context) {
         GetUpcomingAlarmsUseCase(alarmRepository)
     }
 
+    // Managers
+    val missionManager: com.omondit.alarmfocus.utils.MissionManager by lazy {
+        com.omondit.alarmfocus.utils.MissionManager(context, alarmRepository)
+    }
+
+    val encryptionManager: com.omondit.alarmfocus.utils.EncryptionManager by lazy {
+        com.omondit.alarmfocus.utils.EncryptionManager(context)
+    }
+
     // ViewModel Factory
     fun createAlarmViewModel(): AlarmViewModel {
         return AlarmViewModel(

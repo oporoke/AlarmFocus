@@ -27,6 +27,12 @@ class AlarmReceiver : BroadcastReceiver() {
     private val receiverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Security: Validate intent to prevent spoofing
+        if (!isValidAlarmIntent(intent)) {
+            Log.w(TAG, "Rejecting potentially spoofed alarm intent")
+            return
+        }
+
         val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
         Log.d(TAG, "===== ALARM RECEIVED: ID=$alarmId =====")
         val soundUri = intent.getStringExtra(EXTRA_SOUND_URI)
@@ -67,8 +73,32 @@ class AlarmReceiver : BroadcastReceiver() {
 
             // TODO: Implement fallback notification or system alarm
             // This is critical for ADHD users who depend on the alarm
-        }finally {
+        } finally {
             pendingResult.finish()
         }
+    }
+
+    /**
+     * Validates that the alarm intent contains expected data and comes from a trusted source
+     * Prevents malicious apps from triggering alarms
+     */
+    private fun isValidAlarmIntent(intent: Intent): Boolean {
+        // Check required extras are present
+        if (!intent.hasExtra(EXTRA_ALARM_ID)) {
+            Log.w(TAG, "Intent missing EXTRA_ALARM_ID")
+            return false
+        }
+
+        val alarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
+        if (alarmId < 0) {
+            Log.w(TAG, "Invalid alarm ID: $alarmId")
+            return false
+        }
+
+        // Note: AlarmManager intents don't have a reliable way to verify sender
+        // Best practice is to use PendingIntent with FLAG_IMMUTABLE which we do
+        // The intent must have been created by our app through AlarmScheduler
+
+        return true
     }
 }

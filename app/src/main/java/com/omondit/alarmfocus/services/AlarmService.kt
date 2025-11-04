@@ -18,9 +18,10 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.omondit.alarmfocus.data.database.AppDatabase
-import com.omondit.alarmfocus.data.repository.AlarmRepositoryImpl
+import com.omondit.alarmfocus.AlarmFocusApplication
+import com.omondit.alarmfocus.domain.repository.AlarmRepository
 import com.omondit.alarmfocus.presentation.MissionActivity
+import com.omondit.alarmfocus.utils.EncryptionManager
 import com.omondit.alarmfocus.utils.MissionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,8 +59,9 @@ class AlarmService : Service() {
     private var volumeRampJob: Job? = null
     private var missionStartJob: Job? = null
 
-    private lateinit var alarmRepository: AlarmRepositoryImpl
+    private lateinit var alarmRepository: AlarmRepository
     private lateinit var missionManager: MissionManager
+    private lateinit var encryptionManager: EncryptionManager
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private var originalAlarmVolume: Int = 0
@@ -69,9 +71,10 @@ class AlarmService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val database = AppDatabase.getDatabase(this)
-        alarmRepository = AlarmRepositoryImpl(database.alarmDao())
-        missionManager = MissionManager(this, alarmRepository)
+        val appModule = (application as AlarmFocusApplication).appModule
+        alarmRepository = appModule.alarmRepository
+        missionManager = appModule.missionManager
+        encryptionManager = appModule.encryptionManager
         createNotificationChannel()
         initializeSystemServices()
     }
@@ -79,16 +82,14 @@ class AlarmService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "Service started: action=${intent?.action}")
 
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        val savedAlarmId = prefs.getLong("active_alarm_id", -1L)
-        val savedMissionActive = prefs.getBoolean("mission_active", false)
+        val savedState = encryptionManager.getAlarmServiceState()
 
-        if (savedAlarmId != -1L && intent?.action == ACTION_START_ALARM) {
+        if (savedState.activeAlarmId != -1L && intent?.action == ACTION_START_ALARM) {
             val requestedAlarmId = intent.getLongExtra(EXTRA_ALARM_ID, -1L)
-            if (savedAlarmId == requestedAlarmId) {
-                currentAlarmId = savedAlarmId
-                isMissionActive = savedMissionActive
-                Log.d(TAG, "Restored state: alarmId=$currentAlarmId, missionActive=$isMissionActive")
+            if (savedState.activeAlarmId == requestedAlarmId) {
+                currentAlarmId = savedState.activeAlarmId
+                isMissionActive = savedState.missionActive
+                Log.d(TAG, "Restored encrypted state: alarmId=$currentAlarmId, missionActive=$isMissionActive")
             }
         }
 
@@ -126,7 +127,7 @@ class AlarmService : Service() {
                 if (alarmId != -1L && alarmId == currentAlarmId && isMissionActive) {
                     Log.i(TAG, "Mission completed: $alarmId")
                     isMissionActive = false
-                    prefs.edit().putBoolean("mission_active", false).apply()
+                    encryptionManager.updateMissionActiveStatus(false)
                     serviceScope.launch {
                         alarmRepository.markAlarmDismissed(alarmId)
 
@@ -167,13 +168,12 @@ class AlarmService : Service() {
         val alarm = runBlocking { alarmRepository.getAlarmById(alarmId) }
         val missionConfigJson = alarm?.missionConfig ?: "{}"
 
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putLong("active_alarm_id", alarmId)
-            .putString("active_alarm_sound", soundUri)
-            .putString("mission_config", missionConfigJson)
-            .putLong("alarm_start_time", System.currentTimeMillis())
-            .apply()
+        encryptionManager.saveAlarmServiceState(
+            alarmId = alarmId,
+            soundUri = soundUri,
+            missionConfig = missionConfigJson,
+            missionActive = false
+        )
 
         saveOriginalAudioSettings()
         overrideAudioSettings()
@@ -190,8 +190,7 @@ class AlarmService : Service() {
                 val missionStarted = missionManager.startMission(alarmId)
                 if (missionStarted) {
                     isMissionActive = true
-                    val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-                    prefs.edit().putBoolean("mission_active", true).apply()
+                    encryptionManager.updateMissionActiveStatus(true)
 
                     val notification = createMissionActiveNotification(alarmId)
                     val notificationManager = getSystemService(NotificationManager::class.java)
@@ -342,8 +341,7 @@ class AlarmService : Service() {
             Log.w(TAG, "WakeLock cleanup failed", e)
         }
 
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        prefs.edit().clear().apply()
+        encryptionManager.clearAlarmServiceState()
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -376,8 +374,8 @@ class AlarmService : Service() {
     }
 
     private fun createAlarmNotification(alarmId: Long): Notification {
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        val missionConfig = prefs.getString("mission_config", "{}")
+        val savedState = encryptionManager.getAlarmServiceState()
+        val missionConfig = savedState.missionConfig
 
         val missionIntent = Intent(this, MissionActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -405,8 +403,8 @@ class AlarmService : Service() {
     }
 
     private fun createMissionActiveNotification(alarmId: Long): Notification {
-        val prefs = getSharedPreferences("alarm_service_state", Context.MODE_PRIVATE)
-        val missionConfig = prefs.getString("mission_config", "{}")
+        val savedState = encryptionManager.getAlarmServiceState()
+        val missionConfig = savedState.missionConfig
 
         val missionIntent = Intent(this, MissionActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
