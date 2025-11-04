@@ -117,12 +117,24 @@ fun PhotoMissionScreen(
 
     var currentChallenge by remember { mutableStateOf<Challenge?>(null) }
     var showNoPhotos by remember { mutableStateOf(false) }
+    var timeRemaining by remember { mutableStateOf(0) }
 
     // Generate initial challenge
     LaunchedEffect(Unit) {
         currentChallenge = missionSession.generateNewChallenge()
+        timeRemaining = currentChallenge?.timeoutSeconds ?: 0
         if (currentChallenge?.timeoutSeconds == 0) {
             showNoPhotos = true
+        }
+    }
+
+    // Timeout enforcement
+    LaunchedEffect(currentChallenge, timeRemaining) {
+        if (timeRemaining > 0 && currentChallenge != null && !showNoPhotos) {
+            kotlinx.coroutines.delay(1000)
+            timeRemaining--
+        } else if (timeRemaining == 0 && currentChallenge != null && !showNoPhotos) {
+            onMissionFailed()
         }
     }
 
@@ -184,6 +196,17 @@ fun ActivityMissionScreen(
     val mission = remember { ActivityMission(missionConfig.difficulty, missionConfig) }
     val missionSession = remember { MissionSession(alarmId, mission) }
     val challenge = remember { missionSession.generateNewChallenge() }
+    var timeRemaining by remember { mutableStateOf(challenge.timeoutSeconds) }
+
+    // Timeout enforcement
+    LaunchedEffect(timeRemaining) {
+        if (timeRemaining > 0) {
+            kotlinx.coroutines.delay(1000)
+            timeRemaining--
+        } else if (timeRemaining == 0) {
+            onMissionFailed()
+        }
+    }
 
     ActivityMissionScreen(
         challenge = challenge,
